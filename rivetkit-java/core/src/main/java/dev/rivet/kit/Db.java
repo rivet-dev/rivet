@@ -1,5 +1,7 @@
 package dev.rivet.kit;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
@@ -26,14 +28,19 @@ public interface Db {
     /** Runs statements in one transaction. */
     List<Exec> batch(List<Statement> statements);
 
-    /** Runs {@code work} in a transaction: commits when it returns, rolls back when it throws. */
+    /**
+     * Runs {@code work} in a transaction: commits when it returns, rolls back when it throws.
+     * Like {@code ctx.exclusive}, the actor keeps its turn throughout, so outbound calls made
+     * inside {@code work} do not let other handlers in. Keep transactions short.
+     */
     <T> T transaction(Function<Db, T> work);
 
     record Exec(long changes, Long lastInsertRowId) {}
 
     record Statement(String sql, List<Object> params) {
         public static Statement of(String sql, Object... params) {
-            return new Statement(sql, List.of(params));
+            // Not List.of: null is a valid parameter (it binds SQL NULL).
+            return new Statement(sql, Collections.unmodifiableList(Arrays.asList(params.clone())));
         }
     }
 }

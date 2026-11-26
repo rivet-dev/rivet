@@ -14,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 /**
  * The only class that calls rivetkit-ffi. See DESIGN.md, "The boundary".
@@ -50,6 +51,9 @@ public final class Native {
     private static final Map<Long, Pending> PENDING = new ConcurrentHashMap<>();
     private static final Map<Long, TypeSink> TYPES = new ConcurrentHashMap<>();
     private static final Map<Long, ResourceSink> RESOURCES = new ConcurrentHashMap<>();
+    /** Connection params suppliers, asked by Rust (CONN_PARAMS) before every dial. */
+    private static final Map<Long, Supplier<?>> PARAMS = new ConcurrentHashMap<>();
+    private static final AtomicLong NEXT_PARAMS = new AtomicLong(1);
 
     static {
         NativeLoader.load();
@@ -88,9 +92,30 @@ public final class Native {
         RESOURCES.remove(id);
     }
 
+    /** Registers {@code params} for a connection; Rust asks for it by the returned id. */
+    public static long registerParams(Supplier<?> params) {
+        long source = NEXT_PARAMS.getAndIncrement();
+        PARAMS.put(source, params);
+        return source;
+    }
+
+    public static void unregisterParams(long source) {
+        PARAMS.remove(source);
+    }
+
     /** Calls waiting on Rust. Zero when idle; tests use it to check for leaks. */
     public static int pendingCount() {
         return PENDING.size();
+    }
+
+    /** Live streams, connections and sockets. Tests use it to check for leaks. */
+    public static int resourceCount() {
+        return RESOURCES.size();
+    }
+
+    /** The live resources' types, for leak-check failures. */
+    public static java.util.List<String> resourceTypes() {
+        return RESOURCES.values().stream().map(r -> r.getClass().getSimpleName()).sorted().toList();
     }
 
     // --- upcalls (Rust runtime threads; never throw, never block) ------------------
@@ -113,6 +138,10 @@ public final class Native {
                 log(head);
                 return;
             }
+            if (kind == Wire.CONN_PARAMS) {
+                answerParams(id, head);
+                return;
+            }
             if (actorType != 0 && kind != Wire.STREAM_END && kind != Wire.CLIENT_EVENT && kind != Wire.CLIENT_STATUS) {
                 TypeSink sink = TYPES.get(actorType);
                 if (sink != null) {
@@ -131,17 +160,32 @@ public final class Native {
         }
     }
 
+    /** User code (it may fetch a token), so it runs on a virtual thread, never the Rust one. */
+    private static void answerParams(long event, byte[] header) {
+        long source = Codec.decode(header, Wire.ConnParamsEvent.class).source();
+        Supplier<?> params = PARAMS.get(source);
+        Threads.VIRTUAL.execute(() -> {
+            try {
+                if (params == null) throw new IllegalStateException("the connection was closed");
+                reply(event, null, Codec.encode(params.get()));
+            } catch (Throwable t) {
+                replyError(event, t);
+            }
+        });
+    }
+
     private static boolean takesReply(int kind) {
         return kind < Wire.ABORT || kind == Wire.WS_CLOSE;
     }
 
     private static void onComplete(
             long token, int status, MemorySegment header, long headerLen, MemorySegment body, long bodyLen, long lease) {
+        Pending pending = null;
         try {
             byte[] head = copy(header, headerLen);
             byte[] data = copy(body, bodyLen);
             if (lease != 0) leaseRelease(lease);
-            Pending pending = PENDING.remove(token);
+            pending = PENDING.remove(token);
             if (pending == null) {
                 LOG.log(Level.WARNING, "rivetkit completion for unknown token {0}", token);
                 return;
@@ -155,6 +199,8 @@ public final class Native {
             }
         } catch (Throwable t) {
             LOG.log(Level.ERROR, "rivetkit on_complete upcall failed", t);
+            // Never leave the caller waiting: a no-op if the future already completed.
+            if (pending != null) pending.future().completeExceptionally(t);
         }
     }
 

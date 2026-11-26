@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** {@link Cron} over the wire. */
-final class CronImpl implements Cron {
+final class CronImpl<A> implements Cron<A> {
     private final Instance instance;
 
     CronImpl(Instance instance) {
@@ -26,22 +26,22 @@ final class CronImpl implements Cron {
     }
 
     @Override
-    public <A> void every(String name, Duration interval, Fn.Call0<A> action) {
+    public void every(String name, Duration interval, Fn.Call0<A> action) {
         set(name, interval.toMillis(), null, null, p -> action.call(ScheduleImpl.as(p)));
     }
 
     @Override
-    public <A, T1> void every(String name, Duration interval, Fn.Call1<A, T1> action, T1 a1) {
+    public <T1> void every(String name, Duration interval, Fn.Call1<A, T1> action, T1 a1) {
         set(name, interval.toMillis(), null, null, p -> action.call(ScheduleImpl.as(p), a1));
     }
 
     @Override
-    public <A> void at(String name, String expression, ZoneId zone, Fn.Call0<A> action) {
+    public void at(String name, String expression, ZoneId zone, Fn.Call0<A> action) {
         set(name, null, expression, zone, p -> action.call(ScheduleImpl.as(p)));
     }
 
     @Override
-    public <A, T1> void at(String name, String expression, ZoneId zone, Fn.Call1<A, T1> action, T1 a1) {
+    public <T1> void at(String name, String expression, ZoneId zone, Fn.Call1<A, T1> action, T1 a1) {
         set(name, null, expression, zone, p -> action.call(ScheduleImpl.as(p), a1));
     }
 

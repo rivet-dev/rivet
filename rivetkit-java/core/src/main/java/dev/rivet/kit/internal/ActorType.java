@@ -14,11 +14,11 @@ public final class ActorType implements Native.TypeSink {
 
     final long id = NEXT_ID.getAndIncrement();
     final ApiModel model;
-    final Function<ActorContext<Object>, ?> factory;
+    final Function<ActorContext<?, ?>, ?> factory;
     final Consumer<Db> migrate;
     private final Map<Long, Instance> instances = new ConcurrentHashMap<>();
 
-    public ActorType(ApiModel model, Function<ActorContext<Object>, ?> factory, Consumer<Db> migrate) {
+    public ActorType(ApiModel model, Function<ActorContext<?, ?>, ?> factory, Consumer<Db> migrate) {
         this.model = model;
         this.factory = factory;
         this.migrate = migrate;

@@ -22,6 +22,7 @@
 //! Event `id`: the event handle to `reply` to for kinds that take a reply,
 //! otherwise the resource the event is about (stream, socket, connection) or 0.
 
+mod body;
 mod client;
 mod host;
 pub mod messages;
@@ -36,7 +37,7 @@ pub use host::WireHost;
 pub use runtime::{LEASE_THRESHOLD, Wire};
 
 /// Bumped on any incompatible change to kinds, ops, headers, or rules above.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 /// What an event is. Kinds marked "reply" carry an event handle in `id` and must
 /// be answered with `reply`, even with an error.
@@ -92,6 +93,10 @@ pub enum EventKind {
 	/// Client connection `id` changed status. Header
 	/// [`messages::ClientStatusEvent`].
 	ClientStatus = 51,
+	/// Reply with the CBOR connection params as the body. A connection opened with
+	/// `params_source` asks before every dial, reconnects included. Header
+	/// [`messages::ConnParamsEvent`].
+	ConnParams = 52,
 	/// A log record. Header [`messages::LogEvent`]. `id` 0.
 	Log = 60,
 }

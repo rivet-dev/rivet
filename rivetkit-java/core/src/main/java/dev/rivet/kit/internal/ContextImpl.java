@@ -1,5 +1,6 @@
 package dev.rivet.kit.internal;
 
+import dev.rivet.kit.Actor;
 import dev.rivet.kit.ActorConn;
 import dev.rivet.kit.ActorContext;
 import dev.rivet.kit.Client;
@@ -11,17 +12,22 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
-/** The {@link ActorContext} handed to an actor's constructor. */
-final class ContextImpl implements ActorContext<Object> {
+/**
+ * The {@link ActorContext} handed to an actor's constructor. The actor's API and event types
+ * are only known statically to user code; here they are erased.
+ */
+final class ContextImpl implements ActorContext<ContextImpl.AnyActor, Object> {
+    interface AnyActor extends Actor<Object, Object> {}
+
     private final Instance instance;
-    private final ScheduleImpl schedule;
-    private final CronImpl cron;
+    private final ScheduleImpl<AnyActor> schedule;
+    private final CronImpl<AnyActor> cron;
     private volatile Client client;
 
     ContextImpl(Instance instance) {
         this.instance = instance;
-        this.schedule = new ScheduleImpl(instance);
-        this.cron = new CronImpl(instance);
+        this.schedule = new ScheduleImpl<>(instance);
+        this.cron = new CronImpl<>(instance);
     }
 
     private Calls.Call turn(String what) {
@@ -79,12 +85,12 @@ final class ContextImpl implements ActorContext<Object> {
     }
 
     @Override
-    public Schedule schedule() {
+    public Schedule<AnyActor> schedule() {
         return schedule;
     }
 
     @Override
-    public Cron cron() {
+    public Cron<AnyActor> cron() {
         return cron;
     }
 

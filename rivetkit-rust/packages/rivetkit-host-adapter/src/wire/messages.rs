@@ -196,6 +196,14 @@ pub struct ClientEventEvent {
 	pub name: String,
 }
 
+/// Asks the host for fresh connection params; see [`super::EventKind::ConnParams`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnParamsEvent {
+	/// The `params_source` the host passed to `ClientConnect`.
+	pub source: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientStatusEvent {
@@ -546,6 +554,11 @@ pub struct ClientActionCall {
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct ClientConnectCall {
 	pub target: ActorTarget,
+	/// A host-chosen id. When set, the target's params are ignored and Rust sends a
+	/// [`super::EventKind::ConnParams`] event with it before every dial, so the host
+	/// can supply fresh params (such as a short-lived token) on each reconnect.
+	#[serde(default)]
+	pub params_source: Option<u64>,
 }
 
 /// Body: CBOR array of positional arguments.
@@ -725,6 +738,7 @@ pub(crate) mod fixtures {
 					error: None,
 				}),
 			),
+			EventKind::ConnParams => ("event_conn_params", encode(&ConnParamsEvent { source: 5 })),
 			EventKind::Log => (
 				"event_log",
 				encode(&LogEvent {
@@ -888,7 +902,10 @@ pub(crate) mod fixtures {
 			),
 			Op::ClientConnect => (
 				"call_client_connect",
-				encode(&ClientConnectCall { target: target() }),
+				encode(&ClientConnectCall {
+					target: target(),
+					params_source: Some(5),
+				}),
 			),
 			Op::ClientFetch => (
 				"call_client_fetch",
@@ -1014,7 +1031,7 @@ pub(crate) mod fixtures {
 		]
 	}
 
-	const EVENTS: [EventKind; 24] = [
+	const EVENTS: [EventKind; 25] = [
 		EventKind::Migrate,
 		EventKind::Start,
 		EventKind::Create,
@@ -1038,6 +1055,7 @@ pub(crate) mod fixtures {
 		EventKind::WsClose,
 		EventKind::ClientEvent,
 		EventKind::ClientStatus,
+		EventKind::ConnParams,
 		EventKind::Log,
 	];
 
@@ -1065,7 +1083,7 @@ pub(crate) mod fixtures {
 	#[test]
 	fn every_kind_and_op_is_listed() {
 		// `event` and `op` are exhaustive matches; this checks the lists feeding them.
-		assert_eq!(EVENTS.len(), 24);
+		assert_eq!(EVENTS.len(), 25);
 		let ops = (0..=255).filter_map(Op::from_u32).count();
 		assert_eq!(ops, 40, "update the op list in Op::from_u32");
 	}

@@ -5,9 +5,9 @@ import dev.rivet.kit.Db;
 import dev.rivet.kit.UserError;
 
 public final class CounterActor implements Counter {
-    private final ActorContext<NewCount> ctx;
+    private final ActorContext<Counter, NewCount> ctx;
 
-    public CounterActor(ActorContext<NewCount> ctx) {
+    public CounterActor(ActorContext<Counter, NewCount> ctx) {
         this.ctx = ctx;
     }
 

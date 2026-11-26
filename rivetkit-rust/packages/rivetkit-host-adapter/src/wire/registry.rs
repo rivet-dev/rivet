@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
+use futures::FutureExt;
 use parking_lot::Mutex;
 use rivetkit_core::{ActorConfig, ActorConfigInput, CoreRegistry, EngineSpawnMode, ServeConfig};
 use tokio_util::sync::CancellationToken;
@@ -31,6 +32,25 @@ struct Done {
 impl RegistryHandle {
 	pub fn stop(&self) {
 		self.shutdown.cancel();
+	}
+
+	/// Called when the host releases the registry. Only the serve task settles `done`
+	/// waiters, so a registry that never served settles them here instead of leaving
+	/// them waiting forever.
+	pub(crate) fn released(&self, wire: &Wire) {
+		self.stop();
+		if self.registry.lock().is_none() {
+			return; // serving: its task settles the waiters as it stops
+		}
+		let message = "registry released before it served".to_owned();
+		let waiters = {
+			let mut done = self.done.lock();
+			done.result = Some(Err(message.clone()));
+			std::mem::take(&mut done.waiters)
+		};
+		for token in waiters {
+			wire.complete(token, Err(anyhow!(message.clone())));
+		}
 	}
 }
 
@@ -119,9 +139,13 @@ pub(crate) fn serve(wire: &Arc<Wire>, id: u64, options: ServeOptions, token: u64
 				}
 			}
 		};
-		let result = core
-			.serve_with_config_and_handle_observer(config, shutdown, on_ready)
-			.await;
+		// A panic in core still settles the ready and done waiters below.
+		let result = std::panic::AssertUnwindSafe(
+			core.serve_with_config_and_handle_observer(config, shutdown, on_ready),
+		)
+		.catch_unwind()
+		.await
+		.unwrap_or_else(|_| Err(anyhow!("serving panicked")));
 		let message = result.as_ref().err().map(|error| format!("{error:#}"));
 		// Serving ended before an envoy connected: the ready waiter gets the cause.
 		if let Some(token) = ready.lock().take() {

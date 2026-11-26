@@ -25,8 +25,10 @@ use std::{
 pub use crate::protocol::codec::{QueueSendResult, QueueSendStatus};
 
 /// An action rejected by the actor or the engine, with Rivet's error group and code.
-/// Downcast an action's `anyhow::Error` to this to branch on the code. The display
-/// text is `action failed ({group}/{code}): {message}, metadata={metadata:?}`.
+/// The stateless handle's `action` and `action_cbor`, and a connection's `action_cbor`,
+/// return it: downcast their `anyhow::Error` to branch on the code. A connection's
+/// `action` still reports a plain error. The display text is
+/// `action failed ({group}/{code}): {message}, metadata={metadata:?}`.
 #[derive(Debug, Clone)]
 pub struct ActionError {
 	pub group: String,

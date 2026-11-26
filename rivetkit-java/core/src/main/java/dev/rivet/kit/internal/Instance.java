@@ -68,6 +68,16 @@ final class Instance {
 
     void submit(int kind, long event, byte[] header, byte[] body) {
         if (kind == Wire.REQUEST) prepareRequest(event, header, body);
+        if (kind == Wire.WS_MESSAGE) {
+            // Frames get no reply, so they cannot be refused one by one like other events:
+            // past the limit the socket is closed instead, and later frames are dropped.
+            ServerSocket socket = sockets.get(event);
+            if (socket == null || !socket.isOpen()) return;
+            if (turn.waiting() >= MAX_WAITING) {
+                socket.overloaded();
+                return;
+            }
+        }
         boolean concurrent = kind == Wire.ACTION && isConcurrent(header);
         boolean reply = kind != Wire.WS_MESSAGE;
         if (!concurrent && turn.waiting() >= MAX_WAITING && reply) {
@@ -161,7 +171,7 @@ final class Instance {
         } else if (kind == Wire.START) {
             info = Codec.decode(header, Wire.StartEvent.class).info();
             ctx = new ContextImpl(this);
-            Object created = type.factory.apply((ActorContext<Object>) (ActorContext) ctx);
+            Object created = type.factory.apply(ctx);
             if (created == null) throw new IllegalStateException("the actor factory returned null");
             if (!type.model.api.isInstance(created)) {
                 throw new IllegalStateException(created.getClass().getName() + " does not implement " + type.model.api.getName());
@@ -282,29 +292,44 @@ final class Instance {
         Wire.RequestEvent requestEvent = Codec.decode(header, Wire.RequestEvent.class);
         InputStream body = requestBodies.remove(event);
         Request request = request(requestEvent.request(), body);
-        if (!(actor instanceof OnRequest hook)) {
-            request.body().close();
-            throw new RivetException("actor", "not_configured", "this actor does not handle HTTP requests");
+        // The request body is closed once the response is done, read or not: an unread
+        // streamed body would otherwise keep its chunks (up to the 256 KiB window) leased
+        // and its Rust stream open. A streaming response hands it to the writer task.
+        boolean handedOff = false;
+        try {
+            if (!(actor instanceof OnRequest hook)) {
+                throw new RivetException("actor", "not_configured", "this actor does not handle HTTP requests");
+            }
+            Response response = hook.onRequest(request);
+            if (response == null) throw new IllegalStateException("onRequest returned null");
+            switch (response) {
+                case Response.Bytes whole -> Native.reply(event,
+                        Codec.encode(new Wire.RequestReply(whole.status(), whole.headers(), false)), whole.body());
+                case Response.Streaming streaming -> {
+                    Native.reply(event,
+                            Codec.encode(new Wire.RequestReply(streaming.status(), streaming.headers(), true)), null);
+                    stream(streaming.writer(), new Streams.Outbound(requestEvent.responseBody()), request.body());
+                    handedOff = true;
+                }
+            }
+        } finally {
+            if (!handedOff) closeQuietly(request.body());
         }
-        Response response = hook.onRequest(request);
-        if (response == null) throw new IllegalStateException("onRequest returned null");
-        Map<String, String> headers = response.headers() == null ? Map.of() : response.headers();
-        if (response.writer() == null) {
-            byte[] bytes = response.body() == null ? new byte[0] : response.body();
-            Native.reply(event, Codec.encode(new Wire.RequestReply(response.status(), headers, false)), bytes);
-            return;
-        }
-        Native.reply(event, Codec.encode(new Wire.RequestReply(response.status(), headers, true)), null);
-        Streams.Outbound out = new Streams.Outbound(requestEvent.responseBody());
+    }
+
+    /** Runs a streaming response's writer as a background turn; the writer may still read the request body. */
+    private void stream(Response.Writer writer, Streams.Outbound out, InputStream requestBody) {
         spawn(() -> {
             BufferedOutputStream buffered = new BufferedOutputStream(out, 64 * 1024);
             try {
-                response.writer().write(buffered);
+                writer.write(buffered);
             } catch (Exception e) {
                 // Abort without closing: closing would end the body cleanly.
                 LOG.log(Level.WARNING, "rivetkit: streaming response failed", e);
                 out.abort(String.valueOf(e.getMessage()));
                 return;
+            } finally {
+                closeQuietly(requestBody);
             }
             try {
                 buffered.close();
@@ -312,6 +337,14 @@ final class Instance {
                 LOG.log(Level.DEBUG, "rivetkit: client went away before the response ended", e);
             }
         }, ctx.keepAwakeRegion());
+    }
+
+    private static void closeQuietly(InputStream in) {
+        try {
+            in.close();
+        } catch (Exception ignored) {
+            // releasing either way
+        }
     }
 
     /** Runs {@code work} as a background turn; releases {@code region} when it ends. */

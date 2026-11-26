@@ -18,9 +18,10 @@ import java.util.concurrent.Callable;
  * {@link #exclusive}. Calling any method here from a thread that does not hold the
  * turn throws {@link IllegalStateException}.
  *
+ * @param <A> the actor's API (its own methods are what {@link #schedule} and {@link #cron} accept)
  * @param <E> the API's event type
  */
-public interface ActorContext<E> {
+public interface ActorContext<A extends Actor<E, ?>, E> {
     String actorId();
 
     /** The actor type's name. */
@@ -45,9 +46,9 @@ public interface ActorContext<E> {
     /** This actor's SQLite database. Calls keep the turn. */
     Db db();
 
-    Schedule schedule();
+    Schedule<A> schedule();
 
-    Cron cron();
+    Cron<A> cron();
 
     /** A client for calling other actors. Calls give up the turn while they wait. */
     Client client();

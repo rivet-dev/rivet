@@ -16,7 +16,6 @@ use tokio_util::sync::CancellationToken;
 use super::messages::{ErrorBody, decode, encode};
 use super::{Event, EventKind, Status, Transport};
 use crate::errors::rivet_error_with_meta;
-use crate::http::ResponseBody;
 
 /// Bodies larger than this are leased instead of lent.
 pub const LEASE_THRESHOLD: usize = 64 * 1024;
@@ -66,7 +65,7 @@ pub(crate) enum Handle {
 	},
 	Region(#[allow(dead_code)] Region),
 	Tx(Arc<SqliteTransaction>),
-	ResponseBody(Arc<ResponseBody>),
+	ResponseBody(Arc<super::body::OrderedBody>),
 	/// An inbound stream; releasing it cancels the pump.
 	InStream(CancellationToken),
 	WebSocket(WebSocket),
@@ -136,9 +135,10 @@ impl Wire {
 		self.handles.lock().get(&id).map_or(0, |entry| entry.owner)
 	}
 
-	/// Removes every handle `owner` created. Called when an actor stops.
+	/// Removes every handle `owner` created. Called when an actor stops, and when a
+	/// client is released (its connections, sockets and bodies go with it).
 	pub(crate) fn release_owned(&self, owner: u64) {
-		let removed: Vec<Handle> = {
+		let removed: Vec<(u64, Handle)> = {
 			let mut handles = self.handles.lock();
 			let ids: Vec<u64> = handles
 				.iter()
@@ -150,12 +150,21 @@ impl Wire {
 				.map(|(id, _)| *id)
 				.collect();
 			ids.into_iter()
-				.filter_map(|id| handles.remove(&id).map(|entry| entry.handle))
+				.filter_map(|id| handles.remove(&id).map(|entry| (id, entry.handle)))
 				.collect()
 		};
 		// Dropped outside the lock: some handles run code on drop.
-		for handle in removed {
-			self.cleanup(handle);
+		for (id, handle) in removed {
+			self.cleanup_tree(id, handle);
+		}
+	}
+
+	/// Cleans up `handle` and, for a client, everything it owns.
+	fn cleanup_tree(&self, id: u64, handle: Handle) {
+		let owns_handles = matches!(handle, Handle::Client(_));
+		self.cleanup(handle);
+		if owns_handles {
+			self.release_owned(id);
 		}
 	}
 
@@ -309,7 +318,7 @@ impl Wire {
 			handles.remove(&id).map(|entry| entry.handle)
 		};
 		if let Some(handle) = handle {
-			self.cleanup(handle);
+			self.cleanup_tree(id, handle);
 		}
 		Ok(())
 	}
@@ -344,17 +353,28 @@ impl Wire {
 		self.notify(EventKind::Log, 0, 0, 0, &header);
 	}
 
-	/// Spawns `work` on the runtime and completes `token` with its result.
+	/// Spawns `work` on the runtime and completes `token` with its result. A panic in
+	/// `work` still completes the token (as an internal error): the host may be
+	/// blocked on it with no timeout.
 	pub(crate) fn spawn_complete(
 		self: &Arc<Self>,
 		token: u64,
 		work: impl std::future::Future<Output = Result<Answer>> + Send + 'static,
 	) {
-		let wire = self.clone();
+		let pending = self.pending(token);
 		self.tokio.spawn(async move {
 			let result = work.await;
-			wire.complete(token, result);
+			pending.complete(result);
 		});
+	}
+
+	/// A token that completes exactly once: through [`Pending::complete`], or with an
+	/// error when dropped first (the task holding it panicked or returned early).
+	pub(crate) fn pending(self: &Arc<Self>, token: u64) -> Pending {
+		Pending {
+			wire: self.clone(),
+			token: Some(token),
+		}
 	}
 
 	#[cfg(test)]
@@ -363,20 +383,41 @@ impl Wire {
 	}
 }
 
+/// See [`Wire::pending`].
+pub(crate) struct Pending {
+	wire: Arc<Wire>,
+	token: Option<u64>,
+}
+
+impl Pending {
+	pub(crate) fn complete(mut self, result: Result<Answer>) {
+		if let Some(token) = self.token.take() {
+			self.wire.complete(token, result);
+		}
+	}
+}
+
+impl Drop for Pending {
+	fn drop(&mut self) {
+		if let Some(token) = self.token.take() {
+			let reason = if std::thread::panicking() {
+				"operation panicked"
+			} else {
+				"operation ended without a result"
+			};
+			self.wire.complete(token, Err(anyhow!(reason)));
+		}
+	}
+}
+
 impl Wire {
 	/// Side effects of letting go of a handle. Runs on any thread.
 	fn cleanup(&self, handle: Handle) {
 		match handle {
-			Handle::Registry(registry) => registry.stop(),
+			Handle::Registry(registry) => registry.released(self),
 			Handle::InStream(cancel) => cancel.cancel(),
-			Handle::ResponseBody(body) => {
-				// Ends the response if the host never did.
-				self.tokio.spawn(async move {
-					let _ = body
-						.error("response abandoned by the host".to_owned())
-						.await;
-				});
-			}
+			// Dropping it ends its queue; its task aborts the body if the host never ended it.
+			Handle::ResponseBody(_) => {}
 			Handle::ClientConn(conn) => conn.close(),
 			Handle::ClientSocket(socket) => socket.close(),
 			Handle::Tx(tx) => {

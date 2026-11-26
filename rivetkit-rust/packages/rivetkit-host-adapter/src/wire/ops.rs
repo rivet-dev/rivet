@@ -319,18 +319,11 @@ impl Wire {
 			Op::StreamWrite => {
 				let call: StreamWriteCall = decode(header, "stream write")?;
 				let body_handle = self.response_body(target)?;
-				let data = body.to_vec();
-				let wire = self.clone();
-				self.spawn_complete(token, async move {
-					if !data.is_empty() {
-						body_handle.write(&data).await?;
-					}
-					if call.fin {
-						wire.remove(target);
-						body_handle.end().await?;
-					}
-					Ok(Answer::empty())
-				});
+				if call.fin {
+					// Queued below, so the end still follows every earlier write.
+					self.remove(target);
+				}
+				body_handle.write(body.to_vec(), call.fin, self.pending(token));
 				Ok(())
 			}
 			Op::StreamError => {
@@ -339,10 +332,8 @@ impl Wire {
 					Some(Handle::ResponseBody(body)) => body,
 					_ => bail!("unknown or finished stream handle {target}"),
 				};
-				self.spawn_complete(token, async move {
-					body_handle.error(call.message).await?;
-					Ok(Answer::empty())
-				});
+				// Behind any queued writes, like a fin.
+				body_handle.error(call.message, self.pending(token));
 				Ok(())
 			}
 
@@ -357,13 +348,26 @@ impl Wire {
 					)
 				};
 				match self.socket(target)? {
-					Socket::Server(ws) => ws.send(message),
-					Socket::Client(socket) => socket.send(match message {
-						WsMessage::Binary(bytes) => tungstenite::Message::Binary(bytes.into()),
-						WsMessage::Text(text) => tungstenite::Message::Text(text.into()),
-					})?,
+					// Core's server sockets have no send backpressure: the frame goes to the
+					// envoy at once.
+					Socket::Server(ws) => {
+						ws.send(message);
+						done(Answer::empty())
+					}
+					Socket::Client(socket) => {
+						let frame = match message {
+							WsMessage::Binary(bytes) => tungstenite::Message::Binary(bytes.into()),
+							WsMessage::Text(text) => tungstenite::Message::Text(text.into()),
+						};
+						// Completes when queued; the host waits (in order, one call at a time
+						// per thread) while a slow peer keeps the queue full.
+						self.spawn_complete(token, async move {
+							socket.send(frame).await?;
+							Ok(Answer::empty())
+						});
+						Ok(())
+					}
 				}
-				done(Answer::empty())
 			}
 			Op::WsClose => {
 				let call: WsCloseCall = decode(header, "ws close")?;
@@ -380,8 +384,11 @@ impl Wire {
 							code: code.into(),
 							reason: call.reason.unwrap_or_default().into(),
 						});
-						socket.send(tungstenite::Message::Close(frame))?;
-						done(Answer::empty())
+						self.spawn_complete(token, async move {
+							socket.send(tungstenite::Message::Close(frame)).await?;
+							Ok(Answer::empty())
+						});
+						Ok(())
 					}
 				}
 			}
@@ -431,7 +438,7 @@ impl Wire {
 		})
 	}
 
-	fn response_body(&self, id: u64) -> Result<Arc<crate::http::ResponseBody>> {
+	fn response_body(&self, id: u64) -> Result<Arc<super::body::OrderedBody>> {
 		self.get(id, "stream", |handle| match handle {
 			Handle::ResponseBody(body) => Some(body.clone()),
 			_ => None,

@@ -15,7 +15,7 @@ public final class Wire {
     private Wire() {}
 
     /** The ABI version this Java code speaks. */
-    public static final int ABI_VERSION = 2;
+    public static final int ABI_VERSION = 3;
 
     // Event kinds.
     public static final int MIGRATE = RivetFfi.RIVET_EVENT_KIND_MIGRATE();
@@ -41,6 +41,7 @@ public final class Wire {
     public static final int WS_CLOSE = RivetFfi.RIVET_EVENT_KIND_WS_CLOSE();
     public static final int CLIENT_EVENT = RivetFfi.RIVET_EVENT_KIND_CLIENT_EVENT();
     public static final int CLIENT_STATUS = RivetFfi.RIVET_EVENT_KIND_CLIENT_STATUS();
+    public static final int CONN_PARAMS = RivetFfi.RIVET_EVENT_KIND_CONN_PARAMS();
     public static final int LOG = RivetFfi.RIVET_EVENT_KIND_LOG();
 
     // Ops.
@@ -142,6 +143,8 @@ public final class Wire {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record ClientStatusEvent(String status, ErrorBody error) {}
+
+    public record ConnParamsEvent(long source) {}
 
     public record LogEvent(String level, String target, String message) {}
 
@@ -250,7 +253,8 @@ public final class Wire {
 
     public record ClientActionCall(ActorTarget target, String action) {}
 
-    public record ClientConnectCall(ActorTarget target) {}
+    /** {@code paramsSource}: when set, Rust asks for params with CONN_PARAMS before every dial. */
+    public record ClientConnectCall(ActorTarget target, Long paramsSource) {}
 
     public record ConnActionCall(String action) {}
 

@@ -6,10 +6,10 @@ import dev.rivet.kit.None;
 import java.time.Duration;
 
 public final class PingerActor implements Pinger {
-    private final ActorContext<None> ctx;
+    private final ActorContext<Pinger, None> ctx;
     private int bumps;
 
-    public PingerActor(ActorContext<None> ctx) {
+    public PingerActor(ActorContext<Pinger, None> ctx) {
         this.ctx = ctx;
     }
 

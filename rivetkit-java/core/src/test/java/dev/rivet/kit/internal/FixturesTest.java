@@ -37,6 +37,7 @@ class FixturesTest {
             Map.entry("event_ws_close", Wire.WsCloseEvent.class),
             Map.entry("event_client_event", Wire.ClientEventEvent.class),
             Map.entry("event_client_status", Wire.ClientStatusEvent.class),
+            Map.entry("event_conn_params", Wire.ConnParamsEvent.class),
             Map.entry("event_log", Wire.LogEvent.class),
             Map.entry("call_client_new", Wire.ClientOptions.class),
             Map.entry("call_register", Wire.RegisterOptions.class),

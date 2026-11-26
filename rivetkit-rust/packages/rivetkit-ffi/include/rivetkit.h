@@ -62,6 +62,10 @@ enum rivet_event_kind
   // Client connection `id` changed status. Header
   // [`messages::ClientStatusEvent`].
   RIVET_EVENT_KIND_CLIENT_STATUS = 51,
+  // Reply with the CBOR connection params as the body. A connection opened with
+  // `params_source` asks before every dial, reconnects included. Header
+  // [`messages::ConnParamsEvent`].
+  RIVET_EVENT_KIND_CONN_PARAMS = 52,
   // A log record. Header [`messages::LogEvent`]. `id` 0.
   RIVET_EVENT_KIND_LOG = 60,
 };

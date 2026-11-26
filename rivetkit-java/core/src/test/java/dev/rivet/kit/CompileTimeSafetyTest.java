@@ -5,12 +5,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.StringWriter;
 import java.net.URI;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -39,10 +41,11 @@ class CompileTimeSafetyTest {
         return Stream.of(
                 Arguments.of("good", true, """
                         class ChatRoomActor implements ChatRoom, OnConnect<ChatRoom.Params> {
-                            final ActorContext<Event> ctx;
-                            ChatRoomActor(ActorContext<Event> ctx) { this.ctx = ctx; }
+                            final ActorContext<ChatRoom, Event> ctx;
+                            ChatRoomActor(ActorContext<ChatRoom, Event> ctx) { this.ctx = ctx; }
                             public Message send(String t) { ctx.broadcast(new NewMessage(new Message(t)));
-                                ctx.schedule().after(Duration.ZERO, ChatRoom::purge, 1L); return null; }
+                                ctx.schedule().after(Duration.ZERO, ChatRoom::purge, 1L);
+                                ctx.cron().every("purge", Duration.ofHours(1), ChatRoom::purge, 1L); return null; }
                             public void purge(long c) {}
                             public void onConnect(ActorConn<Params> c) {}
                         }
@@ -51,12 +54,23 @@ class CompileTimeSafetyTest {
                             var conn = c.connect(ChatRoom.class, () -> new ChatRoom.Params("a"), "k");
                             conn.on(ChatRoom.NewMessage.class, e -> {});
                             long n = c.handle(Counter.class, "k").async(Counter::increment, 1L).get();
+                            c.handleWithParams(ChatRoom.class, new ChatRoom.Params("a"), "k").api().send("hi");
                         } }
                         """),
                 Arguments.of("broadcast a non-event", false,
-                        "class X { void f(ActorContext<ChatRoom.Event> ctx) { ctx.broadcast(new Other(1)); } }"),
+                        "class X { void f(ActorContext<ChatRoom, ChatRoom.Event> ctx) { ctx.broadcast(new Other(1)); } }"),
                 Arguments.of("broadcast from an actor without events", false,
-                        "class X { void f(ActorContext<None> ctx) { ctx.broadcast(\"x\"); } }"),
+                        "class X { void f(ActorContext<Counter, None> ctx) { ctx.broadcast(\"x\"); } }"),
+                Arguments.of("context whose events are not the API's", false,
+                        "class X { void f(ActorContext<ChatRoom, None> ctx) {} }"),
+                Arguments.of("schedule another actor's method", false,
+                        "class X { void f(ActorContext<ChatRoom, ChatRoom.Event> ctx) { ctx.schedule().after(java.time.Duration.ZERO, Counter::increment, 1L); } }"),
+                Arguments.of("cron another actor's method", false,
+                        "class X { void f(ActorContext<ChatRoom, ChatRoom.Event> ctx) { ctx.cron().every(\"j\", java.time.Duration.ZERO, Counter::increment, 1L); } }"),
+                Arguments.of("handle params of the wrong type", false,
+                        "class X { void f(Client c) { c.handleWithParams(ChatRoom.class, \"nope\", \"k\"); } }"),
+                Arguments.of("handle params for an API without params", false,
+                        "class X { void f(Client c) { c.handleWithParams(Counter.class, new ChatRoom.Params(\"a\"), \"k\"); } }"),
                 Arguments.of("subscribe to another type", false,
                         "class X { void f(Client c) { c.connect(ChatRoom.class, \"k\").on(Other.class, e -> {}); } }"),
                 Arguments.of("wrong params type", false,
@@ -68,13 +82,13 @@ class CompileTimeSafetyTest {
                         }
                         """),
                 Arguments.of("schedule with a wrong argument", false,
-                        "class X { void f(ActorContext<ChatRoom.Event> ctx) { ctx.schedule().after(java.time.Duration.ZERO, ChatRoom::purge, \"x\"); } }"),
+                        "class X { void f(ActorContext<ChatRoom, ChatRoom.Event> ctx) { ctx.schedule().after(java.time.Duration.ZERO, ChatRoom::purge, \"x\"); } }"),
                 Arguments.of("async with a wrong argument", false,
                         "class X { void f(Client c) { c.handle(Counter.class, \"k\").async(Counter::increment, \"x\"); } }"),
                 Arguments.of("async on another actor's method", false,
                         "class X { void f(Client c) { c.handle(Counter.class, \"k\").async(ChatRoom::send, \"x\"); } }"),
                 Arguments.of("implementation of another API", false, """
-                        class CounterActor implements Counter { CounterActor(ActorContext<None> c) {} public long increment(long b) { return b; } }
+                        class CounterActor implements Counter { CounterActor(ActorContext<Counter, None> c) {} public long increment(long b) { return b; } }
                         class X { void f() { Registry.builder().actor(ChatRoom.class, CounterActor::new); } }
                         """),
                 Arguments.of("not an actor API", false,
@@ -83,7 +97,7 @@ class CompileTimeSafetyTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("cases")
-    void compiles(String name, boolean shouldCompile, String code) {
+    void compiles(String name, boolean shouldCompile, String code, @TempDir Path classes) {
         JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
         StringWriter out = new StringWriter();
         JavaFileObject source = new SimpleJavaFileObject(URI.create("string:///Case.java"), JavaFileObject.Kind.SOURCE) {
@@ -92,7 +106,7 @@ class CompileTimeSafetyTest {
                 return API + code;
             }
         };
-        List<String> options = List.of("-proc:none", "-d", System.getProperty("java.io.tmpdir") + "/rivet-compile-safety",
+        List<String> options = List.of("-proc:none", "-d", classes.toString(),
                 "-cp", System.getProperty("java.class.path"));
         boolean ok = javac.getTask(out, null, null, options, null, List.of(source)).call();
         if (shouldCompile) assertTrue(ok, name + " should compile:\n" + out);

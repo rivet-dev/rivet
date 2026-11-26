@@ -73,6 +73,22 @@ final class ServerSocket implements WebSocket {
         open = false;
     }
 
+    boolean isOpen() {
+        return open;
+    }
+
+    /**
+     * The actor has too many events waiting: close with 1013 (try again later). The close
+     * frame goes out at once; the close listeners run as a turn, like every listener.
+     */
+    synchronized void overloaded() {
+        if (!open) return;
+        open = false;
+        String reason = "actor.overloaded";
+        Threads.VIRTUAL.execute(() -> Native.call(id, Wire.OP_WS_CLOSE, new Wire.WsCloseCall(1013, reason), null));
+        instance.spawn(() -> dispatchClose(1013, reason, false), 0);
+    }
+
     @Override
     public String toString() {
         return "WebSocket[" + id + " of " + instance.type.model.name + "]";

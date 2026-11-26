@@ -32,15 +32,19 @@ public interface Client extends AutoCloseable {
     /** The actor for {@code key}; calls fail with {@code actor/not_found} if it does not exist. */
     <A extends Actor<?, ?>> A get(Class<A> api, String... key);
 
-    /** A handle for options (params, input, by id), async calls, raw HTTP and WebSockets. */
+    /** A handle for options (input, by id), async calls, raw HTTP and WebSockets. */
     <A extends Actor<?, ?>> Handle<A> handle(Class<A> api, String... key);
+
+    /** A handle whose calls carry {@code params}, which must be the API's params type. */
+    <P, A extends Actor<?, P>> Handle<A> handleWithParams(Class<A> api, P params, String... key);
 
     /** A live connection: actions over one WebSocket, plus the actor's events. */
     <E, A extends Actor<E, ?>> Conn<A, E> connect(Class<A> api, String... key);
 
     /**
-     * A live connection with params. {@code params} is called on every (re)connect,
-     * so it can return a fresh token.
+     * A live connection with params. {@code params} is called before every dial, the first
+     * connect and each reconnect, so it can return a fresh token. It runs on a virtual thread
+     * and may block; if it throws, the connection reports the error and retries with backoff.
      */
     <E, P, A extends Actor<E, P>> Conn<A, E> connect(Class<A> api, Supplier<? extends P> params, String... key);
 

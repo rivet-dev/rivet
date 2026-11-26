@@ -29,14 +29,14 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class LabActor
         implements Lab, OnCreate<Lab.CreateInput>, OnWake, OnSleep, OnDestroy, OnSubscribe<Lab.Event>,
                 OnDisconnect<Lab.Params>, OnRequest, OnWebSocket {
-    private final ActorContext<Event> ctx;
+    private final ActorContext<Lab, Event> ctx;
     private int disconnects;
     private int socketsClosed;
     private int spawned;
     private long lastSeenCount = -1;
     private dev.rivet.kit.Conn<Counter, Counter.NewCount> watching;
 
-    public LabActor(ActorContext<Event> ctx) {
+    public LabActor(ActorContext<Lab, Event> ctx) {
         this.ctx = ctx;
     }
 
@@ -135,6 +135,15 @@ public final class LabActor
         socket.onMessage(message -> {
             if (!message.binary() && message.text().equals("bye")) {
                 socket.close(4000, "requested");
+            } else if (!message.binary() && message.text().equals("hold")) {
+                // Holds the turn so later frames pile up (overload test).
+                try {
+                    Thread.sleep(3_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            } else if (!message.binary() && message.text().equals("quiet")) {
+                // no reply
             } else if (message.binary()) {
                 socket.send(message.data());
             } else {
@@ -291,6 +300,13 @@ public final class LabActor
     @Override
     public int disconnects() {
         return disconnects;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public String callerUser() {
+        ActorConn<Params> conn = (ActorConn<Params>) ctx.conn().orElseThrow(() -> new UserError("no_conn", "call over a connection"));
+        return conn.params().user();
     }
 
     @Override

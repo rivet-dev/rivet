@@ -12,7 +12,7 @@ import java.util.Map;
 public final class FilesActor implements Files, OnRequest {
     private long uploaded;
 
-    public FilesActor(ActorContext<None> ctx) {}
+    public FilesActor(ActorContext<Files, None> ctx) {}
 
     @Override
     public Response onRequest(Request request) throws Exception {

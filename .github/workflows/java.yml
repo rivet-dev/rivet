@@ -3,20 +3,23 @@ on:
   pull_request:
     paths:
       - rivetkit-java/**
-      - rivetkit-rust/packages/rivetkit-ffi/**
-      - rivetkit-rust/packages/rivetkit-host-adapter/**
-      - rivetkit-rust/packages/rivetkit-core/**
-      - rivetkit-rust/packages/client/**
+      - rivetkit-rust/packages/**
+      - engine/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
       - .github/workflows/java.yml
   push:
     branches:
       - main
     paths:
       - rivetkit-java/**
-      - rivetkit-rust/packages/rivetkit-ffi/**
-      - rivetkit-rust/packages/rivetkit-host-adapter/**
-      - rivetkit-rust/packages/rivetkit-core/**
-      - rivetkit-rust/packages/client/**
+      - rivetkit-rust/packages/**
+      - engine/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - .github/workflows/java.yml
 concurrency:
   group: java-${{ github.ref }}
   cancel-in-progress: true
@@ -34,8 +37,6 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       # Pins java, gradle, rust, cbindgen and jextract from rivetkit-java/mise.toml.
       - uses: jdx/mise-action@v2
         with:

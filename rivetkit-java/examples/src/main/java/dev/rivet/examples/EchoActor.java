@@ -11,7 +11,7 @@ import java.util.Optional;
 public final class EchoActor implements Echo, OnWebSocket {
     private int frames;
 
-    public EchoActor(ActorContext<None> ctx) {}
+    public EchoActor(ActorContext<Echo, None> ctx) {}
 
     @Override
     public void onWebSocket(WebSocket socket, ActorConn<?> conn, Optional<Request> request) {

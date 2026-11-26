@@ -40,6 +40,9 @@ public interface Lab extends Actor<Lab.Event, Lab.Params> {
 
     int disconnects();
 
+    /** The {@code user} the calling connection's params carried. */
+    String callerUser();
+
     String createdWith();
 
     long sleeps();

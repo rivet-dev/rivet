@@ -19,7 +19,7 @@ is a thin Java layer over the Rust core:
 |---|---|---|
 | Runtime | Java 25, FFM, virtual threads | FFM is final, virtual threads no longer pin on `synchronized`, `ScopedValue` is final. |
 | Data model | No actor state; SQLite plus fields | State, connection state, KV, queues and a plain `run` are deprecated in 3.0. This matches the Rust SDK. |
-| API | Interface (the contract) + class (the actor) + typed proxy (the client) | No `Integer.class` tokens. javac catches wrong events, params, hooks, schedule and async arguments, and the wrong implementation (10 cases tested). This is the approach Restate's Java SDK moved to in 2.5; Dapr and Temporal use it too. |
+| API | Interface (the contract) + class (the actor) + typed proxy (the client) | No `Integer.class` tokens. javac catches wrong events, params, hooks, schedule and async arguments, and the wrong implementation (15 cases tested). This is the approach Restate's Java SDK moved to in 2.5; Dapr and Temporal use it too. |
 | Threading | Turns: one thread at a time per actor; SQL keeps the turn, outbound waits release it | No locks in actor code and no A→B→A deadlock. Strictly safer than JavaScript's `await` interleaving. This is the Cloudflare Durable Objects input-gate rule. |
 | Boundary | `u64` handles, a `u32` kind or op, a CBOR header, an untouched body | Payloads pass through and are never re-encoded. Bodies over 64 KiB and every stream chunk are leased, so Java reads them in place. One `unsafe` block. |
 | Serialization | CBOR (already Rivet's format for user values) | Each host language needs one codec, not two. BARE, protobuf and FlatBuffers would add a toolchain per language for about 20 small headers. |
@@ -46,17 +46,16 @@ engine, mean of 2 rounds (`mise run bench:compare`).
 Java is within 5% of Rust and ahead of TypeScript. Its memory is the JVM's default heap
 sizing; set `-Xmx` to bring it down.
 
-Tests:
-- **Rust:** 21 tests, plus Miri on the `unsafe` block.
-- **Java unit:** codec, turns, API validation, fixtures, and 11 compile-safety cases.
-- **End to end:** 11 tests against a real engine, covering actions, errors, async, events,
-  rejected connections, vars and SQL across sleep, HTTP streaming, WebSockets, turn
-  atomicity, A→B→A calls, and schedules.
+Tests (`mise run test`, about 15s warm on a 32-core laptop):
+- **Rust:** 27 tests (wire behaviour, ordering, ownership, fixture drift, the ABI), plus Miri on the `unsafe` block.
+- **Java unit:** codec, turns, API validation, fixtures, and 16 compile-safety cases.
+- **End to end:** 47 tests against a real engine on a free port, run concurrently on one shared
+  registry, covering actions, errors, async, events, connections, vars and SQL across sleep,
+  transactions, HTTP streaming, WebSockets, turn atomicity, A→B→A calls, schedules and cron.
 
 ## Next
 
-1. Commit on a branch, then add a CI job: one Linux runner with `mise run test`,
-   `bindings:check`, `unsafe:check` and `miri`.
+1. Add `mise run miri` to CI (it needs a nightly toolchain, so it is not in the job yet).
 2. Tests still to add: a TypeScript client calling a Java actor, cron firing, and abort on
    sleep.
 3. Publishing: native jars for each platform, Maven Central, Windows.

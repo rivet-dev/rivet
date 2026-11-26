@@ -24,7 +24,7 @@ public final class BenchServer {
     public static final class BenchCounterActor implements BenchCounter {
         private long count;
 
-        public BenchCounterActor(ActorContext<None> ctx) {}
+        public BenchCounterActor(ActorContext<BenchCounter, None> ctx) {}
 
         @Override
         public long increment(long amount) {

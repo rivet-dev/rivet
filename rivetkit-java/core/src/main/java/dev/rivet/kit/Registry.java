@@ -95,13 +95,13 @@ public final class Registry {
          * and every wake) and receives the actor's context; javac checks that what
          * it builds implements {@code api}.
          */
-        public <E, A extends Actor<E, ?>> Builder actor(Class<A> api, Function<ActorContext<E>, ? extends A> factory) {
+        public <E, A extends Actor<E, ?>> Builder actor(Class<A> api, Function<ActorContext<A, E>, ? extends A> factory) {
             return actor(api, factory, options -> {});
         }
 
         @SuppressWarnings({"unchecked", "rawtypes"})
         public <E, A extends Actor<E, ?>> Builder actor(
-                Class<A> api, Function<ActorContext<E>, ? extends A> factory, Consumer<ActorOptions> configure) {
+                Class<A> api, Function<ActorContext<A, E>, ? extends A> factory, Consumer<ActorOptions> configure) {
             ActorOptions options = new ActorOptions();
             configure.accept(options);
             ApiModel model = ApiModel.of(api);

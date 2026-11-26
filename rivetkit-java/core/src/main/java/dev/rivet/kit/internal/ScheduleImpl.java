@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** {@link Schedule} over the wire; method references become action names and CBOR args. */
-final class ScheduleImpl implements Schedule {
+final class ScheduleImpl<A> implements Schedule<A> {
     private final Instance instance;
 
     ScheduleImpl(Instance instance) {
@@ -16,8 +16,8 @@ final class ScheduleImpl implements Schedule {
     }
 
     @SuppressWarnings("unchecked")
-    static <A> A as(Object proxy) {
-        return (A) proxy;
+    static <T> T as(Object proxy) {
+        return (T) proxy;
     }
 
     private String schedule(Long delayMs, Long timestampMs, Recorder.Invocation invocation) {
@@ -34,32 +34,32 @@ final class ScheduleImpl implements Schedule {
     }
 
     @Override
-    public <A> String after(Duration delay, Fn.Call0<A> action) {
+    public String after(Duration delay, Fn.Call0<A> action) {
         return schedule(millis(delay), null, p -> action.call(as(p)));
     }
 
     @Override
-    public <A, T1> String after(Duration delay, Fn.Call1<A, T1> action, T1 a1) {
+    public <T1> String after(Duration delay, Fn.Call1<A, T1> action, T1 a1) {
         return schedule(millis(delay), null, p -> action.call(as(p), a1));
     }
 
     @Override
-    public <A, T1, T2> String after(Duration delay, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2) {
+    public <T1, T2> String after(Duration delay, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2) {
         return schedule(millis(delay), null, p -> action.call(as(p), a1, a2));
     }
 
     @Override
-    public <A> String at(Instant time, Fn.Call0<A> action) {
+    public String at(Instant time, Fn.Call0<A> action) {
         return schedule(null, time.toEpochMilli(), p -> action.call(as(p)));
     }
 
     @Override
-    public <A, T1> String at(Instant time, Fn.Call1<A, T1> action, T1 a1) {
+    public <T1> String at(Instant time, Fn.Call1<A, T1> action, T1 a1) {
         return schedule(null, time.toEpochMilli(), p -> action.call(as(p), a1));
     }
 
     @Override
-    public <A, T1, T2> String at(Instant time, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2) {
+    public <T1, T2> String at(Instant time, Fn.Call2<A, T1, T2> action, T1 a1, T2 a2) {
         return schedule(null, time.toEpochMilli(), p -> action.call(as(p), a1, a2));
     }
 

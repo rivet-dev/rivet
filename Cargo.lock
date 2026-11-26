@@ -5217,7 +5217,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-ffi"
-version = "3.1.2-rc.5"
+version = "3.1.2-rc.8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5237,7 +5237,7 @@ dependencies = [
 
 [[package]]
 name = "rivetkit-host-adapter"
-version = "3.1.2-rc.5"
+version = "3.1.2-rc.8"
 dependencies = [
  "anyhow",
  "bytes",

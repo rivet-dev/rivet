@@ -52,7 +52,7 @@ class RegistryValidationTest {
     }
 
     private static <E, A extends Actor<E, ?>> String error(Class<A> api) {
-        Function<ActorContext<E>, A> factory = ctx -> null;
+        Function<ActorContext<A, E>, A> factory = ctx -> null;
         return assertThrows(IllegalArgumentException.class, () -> Registry.builder().actor(api, factory))
                 .getMessage();
     }
@@ -84,7 +84,7 @@ class RegistryValidationTest {
 
     @Test
     void apisCanExtendOtherApis() {
-        Function<ActorContext<Base.Tick>, Derived> factory = ctx -> null;
+        Function<ActorContext<Derived, Base.Tick>, Derived> factory = ctx -> null;
         Registry registry = Registry.builder().actor(Derived.class, factory).build();
         assertEquals(List.of("derived"), registry.names());
     }

@@ -3,11 +3,13 @@ package dev.rivet.kit.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +37,7 @@ class TurnTest {
                 done.countDown();
             });
         }
-        done.await();
+        assertTrue(done.await(10, TimeUnit.SECONDS), "every holder finished");
         assertEquals(1, maxInside.get(), "never two holders at once");
         for (int i = 0; i < n; i++) assertEquals(i, order.get(i));
     }

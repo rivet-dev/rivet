@@ -77,6 +77,19 @@ final class DbImpl implements Db {
 
     @Override
     public <T> T transaction(Function<Db, T> work) {
+        // Hold the turn for the whole transaction, as `exclusive` does. Otherwise an outbound
+        // call inside `work` yields the turn, the next handler's `db()` call waits on the open
+        // transaction while holding the turn, and the transaction can never take it back.
+        Calls.Call call = Calls.current();
+        if (call != null) call.exclusive++;
+        try {
+            return transact(work);
+        } finally {
+            if (call != null) call.exclusive--;
+        }
+    }
+
+    private <T> T transact(Function<Db, T> work) {
         long tx = Native.handleOf(Native.callSync(target, Wire.OP_SQL_BEGIN, new Wire.SqlBeginCall(null, null), null));
         T result;
         try {

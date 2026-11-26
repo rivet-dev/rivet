@@ -230,6 +230,15 @@ public class RivetFfi extends RivetFfi$shared {
     public static int RIVET_EVENT_KIND_CLIENT_STATUS() {
         return RIVET_EVENT_KIND_CLIENT_STATUS;
     }
+    private static final int RIVET_EVENT_KIND_CONN_PARAMS = (int)52L;
+    /**
+     * {@snippet lang=c :
+     * enum rivet_event_kind.RIVET_EVENT_KIND_CONN_PARAMS = 52
+     * }
+     */
+    public static int RIVET_EVENT_KIND_CONN_PARAMS() {
+        return RIVET_EVENT_KIND_CONN_PARAMS;
+    }
     private static final int RIVET_EVENT_KIND_LOG = (int)60L;
     /**
      * {@snippet lang=c :

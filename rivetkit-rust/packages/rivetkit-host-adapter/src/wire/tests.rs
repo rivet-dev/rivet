@@ -75,13 +75,14 @@ fn target(wire: &Arc<Wire>) -> Target {
 }
 
 async fn wait_for(mut done: impl FnMut() -> bool) {
-	for _ in 0..200 {
+	// Generous: a loaded CI box (cargo and the JVM suite side by side) can stall for >1s.
+	for _ in 0..2000 {
 		if done() {
 			return;
 		}
 		tokio::time::sleep(Duration::from_millis(5)).await;
 	}
-	panic!("condition not reached");
+	panic!("condition not reached within 10s");
 }
 
 #[tokio::test]
@@ -310,4 +311,126 @@ async fn stopping_an_actor_keeps_leases_the_host_still_reads() {
 	assert_eq!(wire.handle_count(), 1, "the lease outlives the actor");
 	wire.lease_release(lease).unwrap();
 	assert_eq!(wire.handle_count(), 0);
+}
+
+#[tokio::test]
+async fn a_panicking_operation_still_completes_its_token() {
+	let (wire, recorder) = setup();
+	wire.spawn_complete(7, async { panic!("boom") });
+	wait_for(|| !recorder.completions.lock().is_empty()).await;
+	let completion = recorder.completions.lock()[0].clone();
+	assert_eq!(completion.token, 7);
+	assert_eq!(completion.status, Status::Error);
+	let error: ErrorBody = decode(&completion.header, "error").unwrap();
+	assert!(error.message.contains("panicked"), "{}", error.message);
+}
+
+#[tokio::test]
+async fn a_dropped_pending_token_completes_once_with_an_error() {
+	let (wire, recorder) = setup();
+	drop(wire.pending(8));
+	wire.pending(9)
+		.complete(Ok(super::runtime::Answer::empty()));
+	let completions = recorder.completions.lock().clone();
+	assert_eq!(completions.len(), 2);
+	assert_eq!(
+		(completions[0].token, completions[0].status),
+		(8, Status::Error)
+	);
+	assert_eq!(
+		(completions[1].token, completions[1].status),
+		(9, Status::Ok)
+	);
+}
+
+#[tokio::test]
+async fn releasing_a_client_releases_what_it_opened() {
+	let (wire, recorder) = setup();
+	let options = encode(&super::messages::ClientOptions {
+		endpoint: "http://127.0.0.1:1".into(),
+		token: None,
+		namespace: None,
+		pool_name: None,
+	});
+	wire.call(0, super::Op::ClientNew as u32, &options, &[], 1);
+	let created: super::messages::Created =
+		decode(&recorder.completions.lock()[0].header, "created").unwrap();
+	// Stands in for a connection, socket or fetch body the client opened.
+	let cancel = tokio_util::sync::CancellationToken::new();
+	wire.insert(
+		created.handle,
+		super::runtime::Handle::InStream(cancel.clone()),
+	);
+	assert_eq!(wire.handle_count(), 2);
+	wire.release(created.handle).unwrap();
+	assert_eq!(wire.handle_count(), 0, "the client's children go with it");
+	assert!(
+		cancel.is_cancelled(),
+		"and are cleaned up, not just forgotten"
+	);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn stream_writes_reach_the_body_in_call_order() {
+	use rivetkit_core::ResponseChunk;
+	let (wire, recorder) = setup();
+	let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
+	let body = super::body::OrderedBody::new(&wire, crate::http::ResponseBody::new(tx));
+	let id = wire.insert(0, super::runtime::Handle::ResponseBody(Arc::new(body)));
+	// Issued back to back without waiting, as a host with several writers might.
+	for i in 0..50u8 {
+		let header = encode(&super::messages::StreamWriteCall { fin: i == 49 });
+		wire.call(
+			id,
+			super::Op::StreamWrite as u32,
+			&header,
+			&[i],
+			u64::from(i) + 1,
+		);
+	}
+	let mut seen = Vec::new();
+	while let Some(chunk) = rx.recv().await {
+		match chunk {
+			ResponseChunk::Data {
+				data,
+				finish: false,
+			} => seen.extend(data),
+			ResponseChunk::Data { finish: true, .. } => break,
+			ResponseChunk::Error(message) => panic!("body aborted: {message}"),
+		}
+	}
+	assert_eq!(
+		seen,
+		(0..50u8).collect::<Vec<_>>(),
+		"chunks in call order, end last"
+	);
+	wait_for(|| recorder.completions.lock().len() == 50).await;
+	assert!(
+		recorder
+			.completions
+			.lock()
+			.iter()
+			.all(|c| c.status == Status::Ok)
+	);
+}
+
+#[tokio::test]
+async fn done_waiters_settle_when_a_registry_is_released_without_serving() {
+	let (wire, recorder) = setup();
+	wire.call(0, super::Op::RegistryNew as u32, &[], &[], 1);
+	let created: super::messages::Created =
+		decode(&recorder.completions.lock()[0].header, "created").unwrap();
+	wire.call(created.handle, super::Op::ServeDone as u32, &[], &[], 2);
+	assert_eq!(
+		recorder.completions.lock().len(),
+		1,
+		"waits while the registry exists"
+	);
+	wire.release(created.handle).unwrap();
+	let completions = recorder.completions.lock().clone();
+	assert_eq!(completions.len(), 2);
+	assert_eq!(
+		(completions[1].token, completions[1].status),
+		(2, Status::Error)
+	);
 }

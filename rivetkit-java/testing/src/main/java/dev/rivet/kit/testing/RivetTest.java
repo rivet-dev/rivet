@@ -20,7 +20,8 @@ import java.util.function.Supplier;
  * }</pre>
  */
 public final class RivetTest implements AutoCloseable {
-    public static final String ENDPOINT = "http://127.0.0.1:6420";
+    /** The engine endpoint: the {@code rivet.test.endpoint} system property, else the default local engine. */
+    public static final String ENDPOINT = System.getProperty("rivet.test.endpoint", "http://127.0.0.1:6420");
 
     private final Registry.Serving serving;
     private final Client client;
@@ -76,12 +77,12 @@ public final class RivetTest implements AutoCloseable {
             try {
                 return call.get();
             } catch (RivetException e) {
-                String m = e.getMessage();
+                String m = String.valueOf(e.getMessage());
                 boolean starting = m.contains("actor_ready_timeout") || m.contains("no_runner_config")
                         || m.contains("Service Unavailable") || m.contains("runner_config");
                 if (!starting || System.nanoTime() > deadline) throw e;
                 try {
-                    Thread.sleep(250);
+                    Thread.sleep(100);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     throw e;

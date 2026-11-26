@@ -19,12 +19,12 @@ import java.util.Optional;
 public final class ChatRoomActor
         implements ChatRoom, OnBeforeConnect<ChatRoom.Params>, OnConnect<ChatRoom.Params>, OnDisconnect<ChatRoom.Params>,
                 OnWake {
-    private final ActorContext<Event> ctx;
+    private final ActorContext<ChatRoom, Event> ctx;
     // Vars: plain fields, rebuilt on every wake. Turns make them safe without locks.
     private final Map<String, String> userByConn = new HashMap<>();
     private int sentSinceWake;
 
-    public ChatRoomActor(ActorContext<Event> ctx) {
+    public ChatRoomActor(ActorContext<ChatRoom, Event> ctx) {
         this.ctx = ctx;
     }
 

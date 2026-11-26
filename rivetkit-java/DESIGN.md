@@ -38,10 +38,10 @@ public interface ChatRoom extends Actor<ChatRoom.Event, ChatRoom.Params> {
 
 // The actor: the API plus the hooks it needs, each a one-method interface.
 public final class ChatRoomActor implements ChatRoom, OnConnect<ChatRoom.Params>, OnWake {
-    private final ActorContext<Event> ctx;
+    private final ActorContext<ChatRoom, Event> ctx;
     private final Map<String, String> userByConn = new HashMap<>();   // a var: no locks needed
 
-    public ChatRoomActor(ActorContext<Event> ctx) { this.ctx = ctx; }   // runs on every start
+    public ChatRoomActor(ActorContext<ChatRoom, Event> ctx) { this.ctx = ctx; }   // runs on every start
 
     @Override public void onWake() {
         ctx.cron().every("purge", Duration.ofHours(1), ChatRoom::purgeOlderThan, 0L);   // method ref, not a string
@@ -77,10 +77,10 @@ try (Client client = Client.of("http://127.0.0.1:6420")) {
 | `Actor<E, P>` | Base of every API interface. `E` is the events (a sealed interface of records, one record, or `None`). `P` is the connection params (or `None`). |
 | `@Name`, `@Concurrent` | `@Name` pins a wire name for an actor, action or event. `@Concurrent` runs an action outside the turn. |
 | `OnCreate<I>`, `OnWake`, `OnSleep`, `OnDestroy`, `OnFork`, `OnBeforeConnect<P>`, `OnConnect<P>`, `OnDisconnect<P>`, `OnSubscribe<E>`, `OnRequest`, `OnWebSocket` | Hooks, each a one-method interface: implement only the ones you need. |
-| `ActorContext<E>` | `broadcast`, `send`, `conn()`, `conns()`, `db()`, `schedule()`, `cron()`, `client()`, `keepAwake`, `waitUntil`, `spawn`, `aborted`, `blocking`, `exclusive`, `sleep`, `destroy`, plus the actor's id, name, key and region. |
+| `ActorContext<A, E>` | (`A` the actor's API, `E` its events; `schedule()` and `cron()` take only `A`'s methods) `broadcast`, `send`, `conn()`, `conns()`, `db()`, `schedule()`, `cron()`, `client()`, `keepAwake`, `waitUntil`, `spawn`, `aborted`, `blocking`, `exclusive`, `sleep`, `destroy`, plus the actor's id, name, key and region. |
 | `Db` | `query` / `queryOne` map rows to records (by column name; `snake_case` columns also match camelCase fields) or scalars. Also `exec`, `script`, `batch`, `transaction`. |
 | `Schedule`, `Cron` | Calls to this actor's own actions, written as method references. |
-| `Request`, `Response`, `WebSocket` | Raw HTTP (streaming bodies both ways) and raw WebSockets. |
+| `Request`, `Response`, `FetchResponse`, `WebSocket` | Raw HTTP (streaming bodies both ways) and raw WebSockets. An actor's `onRequest` returns a `Response` (`Bytes` or `Streaming`); a client's `fetch` returns a `FetchResponse`. |
 | `Registry` | `builder().actor(...)`, then `build()`, then `serve()` (returns `Serving`). Also `validate()` for tests. |
 | `Client`, `Handle<A>`, `Conn<A, E>` | Typed proxies; `async` / `run` by method reference; connections with events, status and `onError`; `fetch` and `webSocket` for raw access. |
 | `RivetException`, `UserError` | Errors carry group, code, message and metadata. Throw `UserError` to send the client a specific error; other exceptions reach clients as `core/internal_error` and are logged. |
@@ -196,7 +196,18 @@ Upcalls: `on_event(kind, actor_type, actor, id, header, body, lease)` and
 - Every export runs inside `catch_unwind` (`exports_are_guarded`).
 - Completions finish internal futures inline. User-facing futures continue on virtual threads.
 - A resource whose answer creates a stream, connection or socket registers its sink inline in
-  the completion, before Rust can send its first event.
+  the completion, before Rust can send its first event. Events Rust has for it before then are
+  held back and flushed after the completion (client connection status also adds a snapshot).
+- **Order is per resource, in both directions.** Rust → Java: a resource's events follow its
+  creation, in order (the holds above, the WebSocket open gate). Java → Rust: ops on one
+  response body go into that body's FIFO when called (`wire/body.rs`), so a write, `fin` or
+  abort never overtakes an earlier one. Ops on different resources stay concurrent: one
+  actor's slow SQL never waits behind another resource's writes.
+- **Ownership.** An actor owns what it creates, a client owns its connections, sockets and
+  fetch bodies; releasing an owner releases what it owns (`release_owned`). On the Java side
+  `Client.close()` closes its connections and sockets, an actor's `ctx.client()` closes when
+  the actor sleeps, and an `onRequest` request body is closed when the response is done.
+  The end-to-end suite checks that no call is left waiting and no resource is left open.
 
 ## 6. Keeping it up to date
 
@@ -249,9 +260,11 @@ Gradle builds the Rust library and packages it under `native/<os>-<arch>/`.
 How the end-to-end suite stays fast:
 - **Concurrency.** Tests run concurrently (`junit-platform.properties`, 4 threads). They share one registry and engine (`TestRivet`), and each test uses fresh actor keys.
 - **A fresh engine store.** Every run gets an empty store (`RIVETKIT_STORAGE_PATH` under `examples/build/`). An engine started on old data first replays every actor earlier runs left behind, which delayed the first call by about 30 s.
-- **Hangs fail fast.** Each test has a 20 s timeout.
+- **Its own engine.** Gradle picks a free port block per run (`rivet.test.endpoint`), so a run never reuses an engine left on 6420 by a developer or an earlier run.
+- **No graceful stop.** The engine and its store are thrown away, so the JVM's shutdown hook kills the engine instead of waiting out its storage drain (about 10 s).
+- **Hangs fail fast.** Each test has a 20 s timeout on its own thread, the warm-up has a 60 s deadline, and the leak check (no calls left waiting on Rust) runs once, after every class.
 
-The whole suite runs in about 15 s.
+`mise run test` (Rust and Java) takes about 15 s warm.
 
 Coverage: `mise run coverage` writes JaCoCo for `core` (unit plus end-to-end) to
 `build/reports/coverage/`; it is about 90% of lines. For Rust coverage under the Java tests:

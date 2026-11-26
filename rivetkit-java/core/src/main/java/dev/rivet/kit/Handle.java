@@ -13,9 +13,6 @@ public interface Handle<A> {
     /** The typed API. Calls block until the actor answers. */
     A api();
 
-    /** Connection params sent with every call (checked against the API's params type). */
-    Handle<A> withParams(Object params);
-
     /** Input for {@link OnCreate} if this call creates the actor. */
     Handle<A> withInput(Object input);
 
@@ -45,7 +42,7 @@ public interface Handle<A> {
     <T1, T2> CompletableFuture<Void> run(Fn.Call2<A, T1, T2> action, T1 a1, T2 a2);
 
     /** A raw HTTP request to the actor's {@link OnRequest}. The body streams as it arrives. */
-    Response fetch(String method, String path, Map<String, String> headers, byte[] body);
+    FetchResponse fetch(String method, String path, Map<String, String> headers, byte[] body);
 
     /** A raw WebSocket to the actor's {@link OnWebSocket}. */
     WebSocket webSocket(String path);

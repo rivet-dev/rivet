@@ -9,8 +9,15 @@ import java.util.function.Consumer;
  * listeners run on one thread per socket, in frame order.
  */
 public interface WebSocket extends AutoCloseable {
+    /**
+     * Sends a frame. On the client side this waits while the peer is slow (a small queue is
+     * full), so a fast sender cannot grow memory without bound; inside an actor it gives up the
+     * turn while it waits. Actor-side sends do not wait: Rivet's server sockets have no send
+     * backpressure.
+     */
     void send(String text);
 
+    /** Sends a binary frame; see {@link #send(String)}. */
     void send(byte[] data);
 
     void close(int code, String reason);

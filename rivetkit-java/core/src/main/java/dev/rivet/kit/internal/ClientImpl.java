@@ -5,7 +5,7 @@ import dev.rivet.kit.Client;
 import dev.rivet.kit.Conn;
 import dev.rivet.kit.Fn;
 import dev.rivet.kit.Handle;
-import dev.rivet.kit.Response;
+import dev.rivet.kit.FetchResponse;
 import dev.rivet.kit.RivetException;
 import dev.rivet.kit.WebSocket;
 import java.lang.System.Logger.Level;
@@ -15,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -28,6 +30,8 @@ public final class ClientImpl implements Client {
 
     final long handle;
     private volatile boolean closed;
+    /** Open connections and sockets, closed with the client (as the TypeScript client's dispose does). */
+    private final Set<AutoCloseable> children = ConcurrentHashMap.newKeySet();
 
     private ClientImpl(long handle) {
         this.handle = handle;
@@ -61,23 +65,53 @@ public final class ClientImpl implements Client {
     }
 
     @Override
+    public <P, A extends Actor<?, P>> Handle<A> handleWithParams(Class<A> api, P params, String... key) {
+        return new HandleImpl<>(this, ApiModel.of(api), List.of(key), null, false,
+                params == null ? null : Codec.encode(params), null);
+    }
+
+    @Override
     public <E, A extends Actor<E, ?>> Conn<A, E> connect(Class<A> api, String... key) {
         return ConnClient.open(this, ApiModel.of(api), new HandleImpl<>(this, ApiModel.of(api), List.of(key), null,
-                false, null, null).target());
+                false, null, null).target(), null);
     }
 
     @Override
     public <E, P, A extends Actor<E, P>> Conn<A, E> connect(
             Class<A> api, Supplier<? extends P> params, String... key) {
+        Objects.requireNonNull(params, "params");
         HandleImpl<A> handle = new HandleImpl<>(this, ApiModel.of(api), List.of(key), null, false, null, null);
-        return ConnClient.open(this, ApiModel.of(api), ((HandleImpl<A>) handle.withParams(params.get())).target());
+        return ConnClient.open(this, ApiModel.of(api), handle.target(), params);
     }
 
     @Override
     public void close() {
         if (closed) return;
         closed = true;
+        for (AutoCloseable child : List.copyOf(children)) {
+            try {
+                child.close();
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "rivetkit: closing a connection with its client failed", e);
+            }
+        }
+        // Rust also closes whatever the client still owns (for example unread fetch bodies).
         Native.release(handle);
+    }
+
+    void adopt(AutoCloseable child) {
+        children.add(child);
+        if (closed) {
+            try {
+                child.close();
+            } catch (Exception ignored) {
+                // closed either way
+            }
+        }
+    }
+
+    void disown(AutoCloseable child) {
+        children.remove(child);
     }
 
     /** A proxy whose actions go through {@code call}. */
@@ -147,19 +181,6 @@ public final class ClientImpl implements Client {
         }
 
         @Override
-        public Handle<A> withParams(Object params) {
-            if (model.paramsType == null) {
-                throw new IllegalArgumentException(model.api.getSimpleName() + " takes no connection params");
-            }
-            if (params != null && !model.paramsType.getRawClass().isInstance(params)) {
-                throw new IllegalArgumentException(model.api.getSimpleName() + " takes params of type "
-                        + model.paramsType.getRawClass().getName() + ", not " + params.getClass().getName());
-            }
-            return new HandleImpl<>(client, model, key, actorId, noCreate,
-                    params == null ? null : Codec.encode(params), input);
-        }
-
-        @Override
         public Handle<A> withInput(Object input) {
             return new HandleImpl<>(client, model, key, actorId, noCreate, params,
                     input == null ? null : Codec.encode(input));
@@ -179,11 +200,13 @@ public final class ClientImpl implements Client {
             Recorder.Recorded call = Recorder.record(model, invocation);
             CompletableFuture<Native.Answer> answer = Native.call(client.handle, Wire.OP_CLIENT_ACTION,
                     new Wire.ClientActionCall(target(), call.action().name), call.action().args.encode(call.args()));
-            return answer.thenApplyAsync(a -> {
+            // userFuture moves success and failure alike off the Rust thread, so callers'
+            // exceptionally/whenComplete callbacks never run (or block) on the runtime.
+            return Native.userFuture(answer).thenApply(a -> {
                 @SuppressWarnings("unchecked")
                 R result = (R) call.action().decodeResult(a.body());
                 return result;
-            }, Threads.VIRTUAL).exceptionallyCompose(error -> CompletableFuture.failedFuture(RivetException.from(error)));
+            }).exceptionallyCompose(error -> CompletableFuture.failedFuture(RivetException.from(error)));
         }
 
         @Override
@@ -222,21 +245,23 @@ public final class ClientImpl implements Client {
         }
 
         @Override
-        public Response fetch(String method, String path, Map<String, String> headers, byte[] body) {
+        public FetchResponse fetch(String method, String path, Map<String, String> headers, byte[] body) {
             AtomicReference<Streams.Inbound> stream = new AtomicReference<>();
             Native.Answer answer = Calls.outbound(() -> Native.await(Native.call(client.handle, Wire.OP_CLIENT_FETCH,
                     new Wire.ClientFetchCall(target(), method, path, headers == null ? Map.of() : headers), body,
                     a -> stream.set(new Streams.Inbound(Codec.decode(a.header(), Wire.FetchResult.class).body())))));
             Wire.FetchResult result = Codec.decode(answer.header(), Wire.FetchResult.class);
-            return Response.received(result.status(), result.headers(), stream.get());
+            return new FetchResponse(result.status(), Map.copyOf(result.headers()), stream.get());
         }
 
         @Override
         public WebSocket webSocket(String path) {
             AtomicReference<ClientSocket> socket = new AtomicReference<>();
+            // Captured here: the completion runs on a Rust thread, outside the actor's call.
+            Dispatch dispatch = Dispatch.forCurrentCall();
             Calls.outbound(() -> Native.await(Native.call(client.handle, Wire.OP_CLIENT_WEB_SOCKET,
                     new Wire.ClientWebSocketCall(target(), path, List.of()), null,
-                    a -> socket.set(new ClientSocket(Native.handleOf(a), Dispatch.forCurrentCall())))));
+                    a -> socket.set(new ClientSocket(client, Native.handleOf(a), dispatch)))));
             return socket.get();
         }
     }
@@ -265,6 +290,8 @@ public final class ClientImpl implements Client {
 
         synchronized boolean submit(Runnable task) {
             if (owner != null) {
+                // The actor instance stopped (slept or was destroyed): its listeners are gone.
+                if (owner.released) return true;
                 if (inFlight >= Conn.MAX_QUEUED_EVENTS) return false;
                 inFlight++;
                 owner.spawn(() -> {
@@ -309,8 +336,10 @@ public final class ClientImpl implements Client {
     // --- connections -------------------------------------------------------------------
 
     static final class ConnClient<A, E> implements Conn<A, E>, Native.ResourceSink {
+        private final ClientImpl client;
         private final ApiModel model;
         private final long id;
+        private final long paramsSource;
         private final Dispatch dispatch;
         private final Map<String, List<Consumer<Object>>> listeners = new ConcurrentHashMap<>();
         private final List<Consumer<Status>> statusListeners = new CopyOnWriteArrayList<>();
@@ -318,21 +347,32 @@ public final class ClientImpl implements Client {
         private volatile Status status = Status.CONNECTING;
         private volatile A api;
 
-        private ConnClient(ApiModel model, long id, Dispatch dispatch) {
+        private ConnClient(ClientImpl client, ApiModel model, long id, Dispatch dispatch, long paramsSource) {
+            this.client = client;
             this.model = model;
             this.id = id;
             this.dispatch = dispatch;
+            this.paramsSource = paramsSource;
         }
 
-        static <A, E> Conn<A, E> open(ClientImpl client, ApiModel model, Wire.ActorTarget target) {
+        /** {@code params}, when not null, is asked for fresh params before every dial. */
+        static <A, E> Conn<A, E> open(ClientImpl client, ApiModel model, Wire.ActorTarget target, Supplier<?> params) {
             Dispatch dispatch = Dispatch.forCurrentCall();
             AtomicReference<ConnClient<A, E>> conn = new AtomicReference<>();
-            Calls.outbound(() -> Native.await(Native.call(client.handle, Wire.OP_CLIENT_CONNECT,
-                    new Wire.ClientConnectCall(target), null, answer -> {
-                        ConnClient<A, E> created = new ConnClient<>(model, Native.handleOf(answer), dispatch);
-                        Native.registerResource(created.id, created);
-                        conn.set(created);
-                    })));
+            long source = params == null ? 0 : Native.registerParams(params);
+            try {
+                Calls.outbound(() -> Native.await(Native.call(client.handle, Wire.OP_CLIENT_CONNECT,
+                        new Wire.ClientConnectCall(target, source == 0 ? null : source), null, answer -> {
+                            ConnClient<A, E> created =
+                                    new ConnClient<>(client, model, Native.handleOf(answer), dispatch, source);
+                            Native.registerResource(created.id, created);
+                            conn.set(created);
+                            client.adopt(created);
+                        })));
+            } catch (RuntimeException e) {
+                if (source != 0) Native.unregisterParams(source);
+                throw e;
+            }
             return conn.get();
         }
 
@@ -366,7 +406,8 @@ public final class ClientImpl implements Client {
                     case "disconnected" -> Status.DISCONNECTED;
                     default -> Status.CONNECTING;
                 };
-                if (status == Status.CLOSED) return;
+                // Rust follows the held-back events with a snapshot, which may repeat the last one.
+                if (status == Status.CLOSED || status == next) return;
                 status = next;
                 for (Consumer<Status> listener : statusListeners) dispatch.submit(() -> listener.accept(next));
             }
@@ -438,22 +479,27 @@ public final class ClientImpl implements Client {
             status = Status.CLOSED;
             Native.unregisterResource(id);
             Native.release(id);
+            if (paramsSource != 0) Native.unregisterParams(paramsSource);
+            client.disown(this);
         }
     }
 
     // --- raw websockets ---------------------------------------------------------------
 
     static final class ClientSocket implements WebSocket, Native.ResourceSink {
+        private final ClientImpl client;
         private final long id;
         private final Dispatch dispatch;
         private final List<Consumer<Message>> messageListeners = new CopyOnWriteArrayList<>();
         private final List<Consumer<Close>> closeListeners = new CopyOnWriteArrayList<>();
         private volatile boolean open = true;
 
-        ClientSocket(long id, Dispatch dispatch) {
+        ClientSocket(ClientImpl client, long id, Dispatch dispatch) {
+            this.client = client;
             this.id = id;
             this.dispatch = dispatch;
             Native.registerResource(id, this);
+            client.adopt(this);
         }
 
         @Override
@@ -467,6 +513,7 @@ public final class ClientImpl implements Client {
             } else if (kind == Wire.WS_CLOSE) {
                 open = false;
                 Native.unregisterResource(id);
+                client.disown(this);
                 Wire.WsCloseEvent event = Codec.decode(header, Wire.WsCloseEvent.class);
                 Close close = new Close(event.code(), event.reason(), event.wasClean());
                 dispatch.submit(() -> closeListeners.forEach(l -> l.accept(close)));
@@ -485,7 +532,8 @@ public final class ClientImpl implements Client {
 
         private void send(boolean binary, byte[] data) {
             if (!open) throw new IllegalStateException("websocket is closed");
-            Native.callSync(id, Wire.OP_WS_SEND, new Wire.WsSendCall(binary), data);
+            // Waits while the peer is slow (bounded queue in Rust), so give up the turn meanwhile.
+            Calls.outbound(() -> Native.callSync(id, Wire.OP_WS_SEND, new Wire.WsSendCall(binary), data));
         }
 
         @Override

@@ -249,7 +249,10 @@ impl HostInstance for WireInstance {
 
 	fn on_request(&self, request: Request, body: ResponseBody) -> HostFuture<HttpReply> {
 		let wire = &self.to.wire;
-		let response_body = wire.insert(self.to.actor, Handle::ResponseBody(Arc::new(body)));
+		let response_body = wire.insert(
+			self.to.actor,
+			Handle::ResponseBody(Arc::new(super::body::OrderedBody::new(wire, body))),
+		);
 		let stream = request.take_body_stream();
 		let body_stream = stream
 			.as_ref()

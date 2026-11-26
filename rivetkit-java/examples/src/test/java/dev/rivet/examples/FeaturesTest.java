@@ -12,11 +12,11 @@ import dev.rivet.kit.Actor;
 import dev.rivet.kit.ActorContext;
 import dev.rivet.kit.Client;
 import dev.rivet.kit.Conn;
+import dev.rivet.kit.FetchResponse;
 import dev.rivet.kit.Handle;
 import dev.rivet.kit.Name;
 import dev.rivet.kit.None;
 import dev.rivet.kit.Registry;
-import dev.rivet.kit.Response;
 import dev.rivet.kit.RivetException;
 import dev.rivet.kit.WebSocket;
 import dev.rivet.kit.testing.RivetTest;
@@ -26,10 +26,13 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 /** The rest of the public API, actor side and client side, against a real engine. */
+@ExtendWith(TestRivet.class)
 class FeaturesTest {
     private static RivetTest rivet;
     private static Client client;
@@ -174,13 +177,16 @@ class FeaturesTest {
             long sent = counter.increment(1);
             return lab.lastSeenCount() > 0 && lab.lastSeenCount() <= sent;
         }, Duration.ofSeconds(15));
+        // Sleeping closes the actor's client, and with it the connection it opened; the suite's
+        // leak check fails if that connection is still open at the end.
+        lab.sleepNow();
     }
 
     @Test
     void actorsWithoutHttpOrSocketHandlersRefuseThem() {
         Handle<Counter> counter = client.handle(Counter.class, RivetTest.uniqueKey());
         rivet.retry(() -> counter.api().get());
-        Response response = counter.fetch("GET", "/", Map.of(), null);
+        FetchResponse response = counter.fetch("GET", "/", Map.of(), null);
         assertTrue(response.status() >= 400, "status " + response.status());
         assertThrows(RivetException.class, () -> {
             WebSocket socket = counter.webSocket("/");
@@ -211,7 +217,7 @@ class FeaturesTest {
             } catch (RivetException e) {
                 return false;
             }
-        }, Duration.ofSeconds(30));
+        }, Duration.ofSeconds(15));
     }
 
     @Test
@@ -227,7 +233,7 @@ class FeaturesTest {
             } catch (RivetException e) {
                 return true;
             }
-        }, Duration.ofSeconds(30));
+        }, Duration.ofSeconds(15));
     }
 
     @Test
@@ -286,7 +292,6 @@ class FeaturesTest {
         Lab lab = lab(key);
         try (Conn<Lab, Lab.Event> conn = client.connect(Lab.class, () -> new Lab.Params("ann"), key)) {
             // The reply may never arrive: the action closes the connection it came in on.
-            client.handle(Lab.class, key).withParams(new Lab.Params("ann"));
             Thread.ofVirtual().start(() -> {
                 try {
                     conn.api().kickCaller();
@@ -294,7 +299,45 @@ class FeaturesTest {
                     // the connection went away under the call
                 }
             });
-            TestRivet.eventually(() -> lab.disconnects() >= 1, Duration.ofSeconds(20));
+            TestRivet.eventually(() -> lab.disconnects() >= 1, Duration.ofSeconds(15));
+        }
+    }
+
+    @Test
+    void paramsAreFetchedAgainOnEveryReconnect() throws Exception {
+        String key = RivetTest.uniqueKey();
+        lab(key);
+        AtomicInteger dials = new AtomicInteger();
+        try (Conn<Lab, Lab.Event> conn =
+                client.connect(Lab.class, () -> new Lab.Params("token-" + dials.incrementAndGet()), key)) {
+            assertEquals("token-1", conn.api().callerUser());
+            // The server drops the connection; the client redials and must ask for params again.
+            Thread.ofVirtual().start(() -> {
+                try {
+                    conn.api().kickCaller();
+                } catch (RuntimeException ignored) {
+                    // the connection went away under the call
+                }
+            });
+            TestRivet.eventually(() -> dials.get() >= 2, Duration.ofSeconds(15));
+            TestRivet.eventually(() -> {
+                try {
+                    return conn.api().callerUser().equals("token-" + dials.get());
+                } catch (RuntimeException reconnecting) {
+                    return false;
+                }
+            }, Duration.ofSeconds(15));
+        }
+    }
+
+    @Test
+    void statusReachesConnectedWithoutAnyCall() throws Exception {
+        // The first transitions can happen before Java knows the connection; they must still
+        // arrive (held back, then a snapshot), never be lost.
+        String key = RivetTest.uniqueKey();
+        lab(key);
+        try (Conn<Lab, Lab.Event> conn = client.connect(Lab.class, () -> new Lab.Params("ann"), key)) {
+            TestRivet.eventually(() -> conn.status() == Conn.Status.CONNECTED, Duration.ofSeconds(10));
         }
     }
 
@@ -331,12 +374,9 @@ class FeaturesTest {
     }
 
     @Test
-    void paramsAreCheckedAgainstTheApi() {
-        Handle<Lab> lab = client.handle(Lab.class, RivetTest.uniqueKey());
-        assertThrows(IllegalArgumentException.class, () -> lab.withParams("not params"));
-        assertThrows(IllegalArgumentException.class,
-                () -> client.handle(Counter.class, "k").withParams(new Lab.Params("x")));
-        Handle<Lab> withParams = lab.withParams(new Lab.Params("ann"));
+    void handlesCarryTypedParams() {
+        // Wrong params types no longer compile (CompileTimeSafetyTest); here they reach the actor.
+        Handle<Lab> withParams = client.handleWithParams(Lab.class, new Lab.Params("ann"), RivetTest.uniqueKey());
         assertEquals("lab", rivet.retry(() -> withParams.api().info()).get(1));
     }
 
@@ -372,7 +412,7 @@ class FeaturesTest {
     void requestsSeeHeadersAndBodies() {
         Handle<Lab> lab = client.handle(Lab.class, RivetTest.uniqueKey());
         rivet.retry(() -> lab.api().info());
-        Response response = lab.fetch("POST", "/headers", Map.of("x-test", "yes"), "body".getBytes());
+        FetchResponse response = lab.fetch("POST", "/headers", Map.of("x-test", "yes"), "body".getBytes());
         assertEquals(201, response.status());
         assertEquals("yes|body", response.text());
         assertEquals("yes", response.headers().get("x-echo"));
@@ -383,7 +423,7 @@ class FeaturesTest {
     void bodiesStreamByteByByte() {
         Handle<Lab> lab = client.handle(Lab.class, RivetTest.uniqueKey());
         rivet.retry(() -> lab.api().info());
-        Response response = lab.fetch("POST", "/bytewise", Map.of(), new byte[70_000]);
+        FetchResponse response = lab.fetch("POST", "/bytewise", Map.of(), new byte[70_000]);
         assertEquals(70_000, response.bytes().length);
     }
 
@@ -391,9 +431,60 @@ class FeaturesTest {
     void failingResponseWritersAbortTheBody() {
         Handle<Lab> lab = client.handle(Lab.class, RivetTest.uniqueKey());
         rivet.retry(() -> lab.api().info());
-        Response response = lab.fetch("GET", "/fails", Map.of(), null);
-        assertEquals(200, response.status());
-        assertThrows(RuntimeException.class, response::bytes, "the client sees a broken body");
+        // The writer fails after flushing, so the gateway may forward the 200 head before the
+        // abort (the body read fails) or abort first (the fetch fails). Either way, the client
+        // must never see the truncated body as a complete response.
+        assertThrows(RuntimeException.class, () -> {
+            FetchResponse response = lab.fetch("GET", "/fails", Map.of(), null);
+            assertEquals(200, response.status());
+            response.bytes();
+        }, "the client sees a broken body");
+    }
+
+    @Test
+    void unreadRequestBodiesAreReleased() {
+        // 1 MiB streams in chunks; the handler answers 404 without reading it. The body must
+        // still be closed (the suite's leak check counts open streams at the end).
+        Handle<Lab> lab = client.handle(Lab.class, RivetTest.uniqueKey());
+        rivet.retry(() -> lab.api().info());
+        for (int i = 0; i < 3; i++) {
+            try (FetchResponse response = lab.fetch("POST", "/ignored", Map.of(), new byte[1 << 20])) {
+                assertEquals(404, response.status());
+            }
+        }
+    }
+
+    @Test
+    void floodedWebSocketsAreClosedAsOverloaded() throws Exception {
+        Handle<Lab> lab = client.handle(Lab.class, RivetTest.uniqueKey());
+        rivet.retry(() -> lab.api().info());
+        BlockingQueue<WebSocket.Close> closes = new LinkedBlockingQueue<>();
+        try (WebSocket socket = lab.webSocket("/")) {
+            socket.onClose(closes::add);
+            socket.send("hold");
+            // More frames than the actor lets wait while one handler holds its turn.
+            try {
+                for (int i = 0; i < 10_200 && closes.isEmpty(); i++) socket.send("quiet");
+            } catch (RuntimeException closedUnderUs) {
+                // The actor closed the socket mid-flood: a send can race the close event.
+            }
+            WebSocket.Close close = closes.poll(15, TimeUnit.SECONDS);
+            assertTrue(close != null, "the actor closed the flooded socket");
+            // The actor closes with 1013. Frames still in flight then hit the gateway's closed
+            // tunnel, and the engine may close the client first with 1011 ups.consumer_closed.
+            assertTrue(close.code() == 1013 || (close.code() == 1011 && close.reason().contains("consumer_closed")),
+                    "closed with " + close);
+        }
+        // The actor side ran its close listener once, as a turn. Until the ~10,000 queued frames
+        // drain, the actor refuses calls as overloaded, which is the point.
+        TestRivet.eventually(() -> {
+            try {
+                return lab.api().socketsClosed() == 1;
+            } catch (RivetException overloaded) {
+                if (!overloaded.code().equals("overloaded")) throw overloaded;
+                return false;
+            }
+        }, Duration.ofSeconds(15));
     }
 
     @Test
@@ -442,14 +533,14 @@ class FeaturesTest {
     }
 
     public static final class TwinActor implements Twin {
-        public TwinActor(ActorContext<None> ctx) {}
+        public TwinActor(ActorContext<Twin, None> ctx) {}
 
         @Override
         public void x() {}
     }
 
     public static final class OtherTwinActor implements OtherTwin {
-        public OtherTwinActor(ActorContext<None> ctx) {}
+        public OtherTwinActor(ActorContext<OtherTwin, None> ctx) {}
 
         @Override
         public void y() {}
