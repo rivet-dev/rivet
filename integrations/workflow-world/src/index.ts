@@ -149,11 +149,16 @@ async function parseQueueRequestBody(req: Request) {
 
 function partitionForQueuePayload(message: QueuePayload) {
 	const data = QueuePayloadSchema.parse(message);
-	const runId = "runId" in data ? data.runId : "workflowRunId" in data ? data.workflowRunId : undefined;
-	if (typeof runId !== "string" || runId.length === 0) {
+	if ("__healthCheck" in data) {
+		// A health check names no run. The runtime reads its reply from the
+		// stream of run `wrun_hc_<correlationId>`, so queue the probe on that
+		// run's actor and the probe and its reply share one actor.
+		return `wrun_hc_${data.correlationId}`;
+	}
+	if (data.runId.length === 0) {
 		throw new Error("Workflow World queue payload requires a non-empty runId");
 	}
-	return runId;
+	return data.runId;
 }
 
 function resolveRuntimeUrl(configured?: string) {
