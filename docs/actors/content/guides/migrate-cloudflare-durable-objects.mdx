@@ -1,0 +1,259 @@
+---
+title: "Migrate from Cloudflare Durable Objects"
+description: "Move Cloudflare Durable Objects to Rivet Actors: map classes, IDs, storage, alarms, and WebSockets to actors, keys, SQLite, schedules, and connections."
+---
+
+A Durable Object and a Rivet Actor are the same idea: a unit of compute addressed by name, with its own private storage, that sleeps when idle. Most code moves over directly. A Durable Object class becomes an actor definition, its public methods become [actions](/actors/docs/actions), `ctx.storage` becomes the actor's [SQLite](/actors/docs/sqlite) database, and the Worker that routes requests becomes a registry and a typed client.
+
+Rivet Actors run on [Rivet Cloud](/docs/deploy/cloud) or on [your own infrastructure](/docs/deploy), so you are not tied to Workers.
+
+## How concepts map
+
+| Cloudflare | Rivet | Notes |
+|---|---|---|
+| `DurableObject` class | [`actor()`](/actors/docs/actions) | Methods become actions. |
+| `DurableObjectNamespace` binding | [Registry](/actors/docs/registry-configuration) | `setup({ use: { ... } })` replaces bindings in `wrangler.toml`. |
+| `idFromName()`, `getByName()` | [Keys](/actors/docs/keys) | `getOrCreate(["name"])` |
+| `newUniqueId()`, `idFromString()` | [Actor IDs](/actors/docs/metadata) | `create()` and `getForId()` |
+| `DurableObjectStub` | [Client handle](/actors/docs/clients/javascript) | Typed from your registry. |
+| `fetch()` handler | [`onRequest`](/actors/docs/request-handler) | Standard `Request` and `Response`. |
+| `ctx.storage.sql` | [SQLite](/actors/docs/sqlite) | `c.db.execute()` |
+| `ctx.storage.get()` / `put()` | [SQLite](/actors/docs/sqlite) | A key-value table. |
+| `blockConcurrencyWhile()` in the constructor | [`createVars`](/actors/docs/state) | Load data before the first action. |
+| Alarms | [Schedule](/actors/docs/schedule) | Any number of schedules per actor, plus cron. |
+| WebSocket Hibernation API | [Connections](/actors/docs/connections) and [events](/actors/docs/events) | Or a raw [`onWebSocket`](/actors/docs/websocket-handler). |
+| Constructor | [`onWake`](/actors/docs/lifecycle) | `onCreate` runs only the first time. |
+| `ctx.waitUntil()` | [`c.waitUntil()`, `c.keepAwake()`](/actors/docs/lifecycle) | Finish background work before sleep. |
+| Auth in the Worker before calling a stub | [`onBeforeConnect`](/actors/docs/authentication) | Runs inside the actor. |
+| `ctx.storage.deleteAll()` | [`c.destroy()`](/actors/docs/destroy) | Deletes the actor and its data. |
+| `@cloudflare/vitest-pool-workers` | [`setupTest`](/actors/docs/testing) | Vitest with an in-process runtime. |
+
+## Define an actor
+
+Each public method on the class becomes an action. Actions receive a context `c` as their first argument instead of using `this.ctx`.
+
+```ts Cloudflare @nocheck
+import { DurableObject } from "cloudflare:workers";
+
+export class Counter extends DurableObject {
+  async increment(amount = 1): Promise<number> {
+    const value = ((await this.ctx.storage.get<number>("value")) ?? 0) + amount;
+    await this.ctx.storage.put("value", value);
+    return value;
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/counter.ts" title="Rivet" />
+
+The registry lists your actors and starts the server. It replaces the bindings and migrations in `wrangler.toml` and the Worker that forwards requests to stubs.
+
+## Address actors by key
+
+`idFromName()` and `getByName()` map to keys. A key is an array of strings, so you can scope it, for example `["org-1", "user-123"]`. `getOrCreate` creates the actor the first time it is called and returns the same actor after that.
+
+```ts Cloudflare @nocheck
+const stub = env.COUNTER.getByName("user-123");
+const value = await stub.increment(5);
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/client.ts" region="by-name" title="Rivet" />
+
+For objects created with `newUniqueId()`, create the actor and keep its ID. `getForId()` replaces `idFromString()`:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/client.ts" region="unique" title="Rivet" />
+
+Use `get()` instead of `getOrCreate()` when a caller must not create an actor, and `createInRegion` in place of a `locationHint` (see [Regions](/docs/regions)):
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/client.ts" region="existing" title="Rivet" />
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/client.ts" region="region" title="Rivet" />
+
+## Move storage to SQLite
+
+Every actor has its own SQLite database, like a SQLite-backed Durable Object. Create your tables in `onMigrate`, which runs on every start, and query them with `c.db.execute(sql, ...args)`. It returns the rows as objects, so there is no cursor or `.toArray()`.
+
+```ts Cloudflare @nocheck
+const orders = this.ctx.storage.sql
+  .exec("SELECT id, item, total FROM orders ORDER BY id DESC LIMIT ?", limit)
+  .toArray();
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/storage.ts" region="sql" title="Rivet" />
+
+`transactionSync()` becomes `c.db.transaction()`. Everything inside the callback commits or rolls back together:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/storage.ts" region="transaction" title="Rivet" />
+
+### Key-value data
+
+Store data you kept with `ctx.storage.get()` and `put()` in a key-value table:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/storage.ts" region="kv-table" title="Rivet" />
+
+### Load data into memory
+
+Durable Objects often read storage inside `blockConcurrencyWhile()` in the constructor and keep it in fields. In Rivet, return that data from `createVars`. It runs on every start, before the actor handles any action or connection, and the result is available as `c.vars`. Write changes back to SQLite so they survive the next restart:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/storage.ts" region="load" title="Rivet" />
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/storage.ts" region="kv" title="Rivet" />
+
+`c.vars` is lost when the actor sleeps or restarts. Keep anything that must survive in SQLite.
+
+### Concurrency
+
+Durable Objects use input gates to stop new events from being delivered while storage calls are in flight. Rivet has no input gates: actions on the same actor run concurrently, and a new action can start while another one is waiting on `await`. Avoid reading a value, awaiting, and writing it back. Instead:
+
+- Do the read and write in one statement, such as `UPDATE ... RETURNING` in the counter above.
+- Group related writes in `c.db.transaction()`.
+- Update `c.vars` synchronously, without an `await` between the read and the write.
+
+There is no equivalent of calling `blockConcurrencyWhile()` to hold off other events during a critical section. If you need one, chain the critical work on a promise kept in `c.vars` so it runs one call at a time.
+
+## Replace alarms with schedules
+
+A Durable Object has one alarm and one `alarm()` handler. A Rivet Actor can have any number of schedules, and each one calls an action with arguments:
+
+```ts Cloudflare @nocheck
+async remind(message: string, delayMs: number) {
+  await this.ctx.storage.put("message", message);
+  await this.ctx.storage.setAlarm(Date.now() + delayMs);
+}
+
+async alarm() {
+  console.log("reminder:", await this.ctx.storage.get("message"));
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/alarms.ts" region="schedule" title="Rivet" />
+
+The schedule stores the action's arguments, so you don't need to keep the reminder in storage, and its ID lets you cancel it. Use `c.schedule.at(timestamp, ...)` for an absolute time. `c.scheduledFire` is set only when a schedule calls the action, so you can reject direct calls from clients. Schedules are durable: they fire even if the actor is asleep.
+
+An alarm that re-arms itself on every run becomes a [cron job](/actors/docs/schedule):
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/alarms.ts" region="cron" title="Rivet" />
+
+## Handle HTTP requests
+
+The `fetch()` method becomes `onRequest`. It takes a standard `Request` and returns a `Response`:
+
+```ts Cloudflare @nocheck
+export class Api extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === "/hello") return new Response("Hello!");
+    return new Response("Not found", { status: 404 });
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/http.ts" region="actor" title="Rivet" />
+
+Call it with `handle.fetch()`, which replaces `stub.fetch()`:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/http.ts" region="client" title="Rivet" />
+
+You can also reach `onRequest` over plain HTTP through the gateway. See [Request Handler](/actors/docs/request-handler).
+
+## Move WebSockets to connections
+
+Most Durable Objects use WebSockets to accept messages and push updates to every client. In Rivet, clients open a [connection](/actors/docs/connections), call actions over it, and receive [events](/actors/docs/events) you broadcast. The client reconnects for you, and you no longer parse message types in `webSocketMessage()`.
+
+```ts Cloudflare @nocheck
+async fetch(request: Request) {
+  const pair = new WebSocketPair();
+  this.ctx.acceptWebSocket(pair[1]);
+  return new Response(null, { status: 101, webSocket: pair[0] });
+}
+
+async webSocketMessage(ws: WebSocket, data: string) {
+  for (const socket of this.ctx.getWebSockets()) socket.send(data);
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/websockets.ts" region="actor" title="Rivet" />
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/websockets.ts" region="client" title="Rivet" />
+
+Data you attached to a socket with `serializeAttachment()` goes in `c.vars`, keyed by `conn.id`, from `onConnect` and `onDisconnect`. `c.conns` lists the open connections, and `conn.send()` sends an event to one of them.
+
+Action calls made without `.connect()` also run `onConnect` and `onDisconnect`, for a connection that lasts only for that call. `conn.params` is `null` when the caller passed no params, so don't assume it is set.
+
+### Keep a custom protocol
+
+If clients already speak your own WebSocket protocol, use `onWebSocket`:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/raw-websocket.ts" region="actor" title="Rivet" />
+
+Clients connect with `handle.webSocket()` or through the gateway URL. See [WebSocket Handler](/actors/docs/websocket-handler).
+
+### Hibernation
+
+By default, WebSockets close when the actor sleeps and clients reconnect. Setting the experimental `canHibernateWebSocket` option keeps them open across sleep instead, for both connections and `onWebSocket`. Two things differ from the Hibernation API:
+
+- `c.vars` is rebuilt when the actor wakes, so keep per-socket data that must survive in SQLite, keyed by `conn.id`.
+- An open WebSocket currently keeps the actor awake, so hibernation does not yet save compute while clients stay connected.
+
+## Authenticate requests
+
+Durable Objects usually trust the Worker to check credentials before it calls a stub. In Rivet, clients call actors directly, so check credentials in `onBeforeConnect`. It runs before every connection and every one-off action call, and throwing rejects the call:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/auth.ts" region="actor" title="Rivet" />
+
+Clients pass credentials as params:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/auth.ts" region="client" title="Rivet" />
+
+See [Authentication](/actors/docs/authentication) for tokens and permissions.
+
+## Lifecycle
+
+A Durable Object has a constructor that runs on every start. A Rivet Actor separates the first creation from later starts:
+
+- `onCreate(c, input)` runs once, when the actor is first created. Pass `input` with `create(key, { input })` or `getOrCreate(key, { createWithInput })`.
+- `onWake` and `createVars` run on every start, including after sleep.
+- `onSleep` runs before an idle actor sleeps, and `onDestroy` runs before it is deleted.
+
+`ctx.waitUntil(promise)` becomes `c.waitUntil(promise)`. Use `c.keepAwake(promise)` when the actor must not start sleeping until the work finishes.
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/lifecycle.ts" region="hooks" title="Rivet" />
+
+### Delete an actor and its data
+
+`ctx.storage.deleteAll()` clears storage but leaves the object addressable. `c.destroy()` permanently deletes the actor and all of its data, and later calls to it fail with `actor.not_found`. Combine it with a schedule for a time-to-live:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/lifecycle.ts" region="create" title="Rivet" />
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/lifecycle.ts" region="destroy" title="Rivet" />
+
+## Call other actors
+
+Inside an actor, `c.client()` replaces calling another namespace's stub from `env`:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/actor-to-actor.ts" region="call" title="Rivet" />
+
+## Test actors
+
+`setupTest` starts the registry in-process for Vitest and returns a typed client, replacing `runInDurableObject()`:
+
+<CodeSnippet file="examples/docs/migrate-cloudflare-durable-objects/counter.test.ts" title="Rivet" />
+
+## Differences to plan for
+
+- **No input gates.** Actions interleave at `await`. See [Concurrency](#concurrency).
+- **Hibernation doesn't save compute yet.** An open WebSocket keeps the actor awake. See [Hibernation](#hibernation).
+- **Storage is SQLite only.** There is no synchronous storage API. Use `c.db` for durable data and `c.vars` for in-memory data.
+- **No point-in-time recovery.** There is no equivalent of `getBookmarkForTime()` or `onNextSessionRestoreBookmark()`. Back up important data to an external store if you need restores.
+- **No class migrations.** Rivet has no `new_sqlite_classes`, `renamed_classes`, or `deleted_classes`. Schema changes go in `onMigrate`. Renaming an actor in the registry does not move existing data to the new name.
+- **Regions instead of jurisdictions.** Pick a region with `createInRegion`. There is no jurisdiction-restricted namespace such as `jurisdiction("eu")`.
+- **RPC values must be serializable.** Actions take and return serializable values. You cannot return a `ReadableStream`, an `RpcTarget`, or a function; stream data with [events](/actors/docs/events) or [`onRequest`](/actors/docs/request-handler) instead.
+- **Workers platform features stay on Cloudflare.** Containers, WebGPU, and Workers bindings such as KV, R2, and AI are not part of Rivet Actors. Call those services from an action with their HTTP APIs or SDKs.
+- **Rust is supported through a different SDK.** Instead of `workers-rs`, use the [Rust SDK](/actors/docs/quickstart/rust).
+
+## Next steps
+
+- [Rivet Actors quickstart](/actors/docs/quickstart/backend)
+- [SQLite](/actors/docs/sqlite)
+- [Lifecycle](/actors/docs/lifecycle)
+- [Limits](/actors/docs/limits)

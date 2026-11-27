@@ -1,0 +1,291 @@
+---
+title: "Migrate from PartyKit"
+description: "Move a PartyKit or PartyServer app to Rivet Actors: each room becomes an actor, socket messages become actions and events, and room storage becomes SQLite."
+---
+
+A PartyKit room maps to a Rivet Actor: one long-lived, stateful process per room ID, with its own storage and its own WebSocket connections. The room ID becomes the actor's [key](/actors/docs/keys).
+
+The main change is how clients talk to the room. Instead of parsing raw socket messages in `onMessage`, clients call typed [actions](/actors/docs/actions) and listen for [events](/actors/docs/events). If you need to keep an existing message protocol, Rivet also accepts [raw WebSockets](#keep-your-websocket-protocol).
+
+This guide covers both PartyKit (`partykit/server`) and PartyServer (`partyserver`). The concepts are the same; differences are called out where they matter.
+
+## How concepts map
+
+| PartyKit | Rivet | Notes |
+|---|---|---|
+| `Party.Server` class, PartyServer `Server` class | [`actor({ ... })`](/actors/docs) | Register actors with `setup({ use })` instead of `partykit.json` parties or Durable Object bindings. |
+| Room ID (`room.id`, `this.name`) | [Actor key](/actors/docs/keys) (`c.key`) | `getOrCreate(["room-id"])` creates the actor on first use, like a PartyKit room. |
+| `onConnect`, `onClose` | [`onConnect`, `onDisconnect`](/actors/docs/connections) | |
+| `onMessage` | [Actions](/actors/docs/actions) or [`onWebSocket`](/actors/docs/websocket-handler) | Actions replace message parsing. `onWebSocket` keeps raw messages. |
+| `room.broadcast(msg, without)` | [`c.broadcast`](/actors/docs/events), `conn.send` | Loop over `c.conns` to skip the sender. |
+| `conn.setState`, `getConnectionTags` | [`c.vars`](/actors/docs/state) keyed by `conn.id` | Use SQLite for connections that hibernate. |
+| `room.storage` | [SQLite](/actors/docs/sqlite) (`c.db`) | |
+| `onStart` | [`createVars`](/actors/docs/state) | Runs on every start, including after sleep. |
+| `room.storage.setAlarm`, `onAlarm` | [`c.schedule`](/actors/docs/schedule) | Many schedules per actor, each calls an action. |
+| `crons` + `onCron` | [`c.cron`](/actors/docs/schedule) | Cron jobs belong to an actor. |
+| `options.hibernate` | [`canHibernateWebSocket`](/actors/docs/websocket-handler#websocket-hibernation) | Keeps sockets open across actor sleep. |
+| `onRequest` | [`onRequest`](/actors/docs/request-handler) | Same `Request` in, `Response` out. |
+| `static onBeforeConnect` | [`onBeforeConnect`](/actors/docs/authentication) | Credentials arrive as connection params. |
+| `room.context.parties` | [`c.client()`](/actors/docs/communicating-between-actors) | |
+| `partysocket`, `usePartySocket` | [`rivetkit/client`](/actors/docs/clients/javascript), [`@rivetkit/react`](/actors/docs/clients/react) | |
+
+## Define a room
+
+Here is a small PartyKit chat room. It stores messages, tracks who is online, and broadcasts each message to the room.
+
+```ts PartyKit @nocheck
+import type * as Party from "partykit/server";
+
+export default class ChatRoom implements Party.Server {
+  constructor(readonly room: Party.Room) {}
+
+  onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
+    const name = new URL(ctx.request.url).searchParams.get("name") ?? "anonymous";
+    conn.setState({ name });
+    this.room.broadcast(JSON.stringify({ type: "joined", name }));
+  }
+
+  async onMessage(raw: string, sender: Party.Connection<{ name: string }>) {
+    const msg = JSON.parse(raw);
+    if (msg.type === "chat") {
+      const messages = (await this.room.storage.get<any[]>("messages")) ?? [];
+      const message = { sender: sender.state?.name, text: msg.text };
+      messages.push(message);
+      await this.room.storage.put("messages", messages);
+      this.room.broadcast(JSON.stringify({ type: "message", ...message }));
+    }
+  }
+
+  onClose(conn: Party.Connection<{ name: string }>) {
+    this.room.broadcast(JSON.stringify({ type: "left", name: conn.state?.name }));
+  }
+}
+```
+
+The same room in Rivet. Each message type becomes an action, each outgoing message becomes a typed event, and messages are rows in the actor's SQLite database:
+
+<CodeSnippet file="examples/docs/migrate-partykit/room.ts" title="Rivet" />
+
+Each room ID gets its own `chatRoom` actor, so `getOrCreate(["general"])` always reaches the same instance, just like `room: "general"` in PartyKit.
+
+If you use PartyServer, the mapping is the same. `this.name` becomes `c.key[0]`, `this.ctx.storage` becomes `c.db`, and `onMessage(connection, message)` (note the reversed arguments) becomes actions. You no longer need `routePartykitRequest` or a Durable Object binding in `wrangler.json`; the registry routes requests to actors.
+
+## Handle messages and broadcast
+
+PartyKit apps usually parse each message and switch on a `type` field. With actions, the client calls a named function with typed arguments, and the action's return value goes back to the caller.
+
+```ts PartyKit @nocheck
+onMessage(raw: string, sender: Party.Connection) {
+  const msg = JSON.parse(raw);
+  if (msg.type === "typing") {
+    // Everyone except the sender
+    this.room.broadcast(JSON.stringify({ type: "typing" }), [sender.id]);
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-partykit/room.ts" region="broadcast" title="Rivet" />
+
+`c.broadcast` sends an event to every connection. To skip the sender or target specific clients, loop over `c.conns` and call `conn.send`. Inside an action, `c.conn` is the connection that called it.
+
+## Track connections and tags
+
+PartyKit stores per-connection data with `conn.setState` and groups connections with `getConnectionTags`. In Rivet, keep that data in [`c.vars`](/actors/docs/state), keyed by `conn.id`. Add it in `onConnect` and remove it in `onDisconnect`:
+
+```ts PartyKit @nocheck
+getConnectionTags(conn: Party.Connection, ctx: Party.ConnectionContext) {
+  return [new URL(ctx.request.url).searchParams.get("team") ?? "none"];
+}
+
+onMessage(raw: string) {
+  for (const conn of this.room.getConnections("red")) {
+    conn.send(raw);
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-partykit/room.ts" region="connections" title="Rivet" />
+
+Filtering by tag becomes a loop over that map:
+
+<CodeSnippet file="examples/docs/migrate-partykit/room.ts" region="tags" title="Rivet" />
+
+Clients pass data such as a name or team as [connection params](/actors/docs/connections#parameters) instead of query string values.
+
+<Note>
+An action called on a handle without `.connect()` also runs `onBeforeConnect`, `onConnect`, and `onDisconnect`, with a short-lived connection that carries the handle's params (or `null` if it has none). Skip connections without params, as above, or call actions through a connection when you track presence.
+</Note>
+
+## Store data
+
+`room.storage` becomes the actor's [SQLite](/actors/docs/sqlite) database. Create tables in `onMigrate`, which runs atomically each time the actor starts. A common PartyKit pattern loads data into memory in `onStart` and writes it back on change. In Rivet, `createVars` does the loading, and it runs on every start, including after the actor sleeps:
+
+```ts PartyKit @nocheck
+export default class Counter implements Party.Server {
+  count = 0;
+
+  async onStart() {
+    this.count = (await this.room.storage.get<number>("count")) ?? 0;
+  }
+
+  async onMessage() {
+    this.count += 1;
+    await this.room.storage.put("count", this.count);
+    this.room.broadcast(String(this.count));
+  }
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-partykit/storage.ts" title="Rivet" />
+
+For data you only read occasionally, skip the in-memory copy and query SQLite directly in each action. There is no key-value storage API; a table with a `key` column works when you need one.
+
+## Keep your WebSocket protocol
+
+If your clients already speak a custom protocol, or send binary frames, use `onWebSocket`. It hands you a standard WebSocket that is already open. PartyKit's `onConnect` becomes the body of `onWebSocket`, and `onMessage` and `onClose` become event listeners. Track open sockets yourself to broadcast:
+
+<CodeSnippet file="examples/docs/migrate-partykit/raw-websocket.ts" region="server" title="Rivet" />
+
+On the client, `.webSocket()` returns a standard `WebSocket`:
+
+<CodeSnippet file="examples/docs/migrate-partykit/raw-websocket.ts" region="client" title="Rivet" />
+
+Raw WebSockets give up typed actions, events, and the client's built-in reconnection. Use them for porting an existing protocol, and prefer actions and events for new features. See [Low-Level WebSocket Handler](/actors/docs/websocket-handler).
+
+## Handle HTTP requests
+
+`onRequest` keeps the same shape: a standard `Request` in, a `Response` out.
+
+```ts PartyKit @nocheck
+async onRequest(req: Party.Request) {
+  if (req.method === "POST") {
+    const { option } = await req.json();
+    await this.room.storage.put(option, ((await this.room.storage.get<number>(option)) ?? 0) + 1);
+    return new Response("ok");
+  }
+  return new Response("Not found", { status: 404 });
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-partykit/http.ts" region="server" title="Rivet" />
+
+Instead of building a `/parties/:party/:room` URL, call `.fetch()` on the actor handle. The path you pass is the path `onRequest` sees:
+
+<CodeSnippet file="examples/docs/migrate-partykit/http.ts" region="client" title="Rivet" />
+
+## Authenticate connections
+
+PartyKit checks credentials in a static `onBeforeConnect` that runs at the edge and returns a `Response` to reject. In Rivet, `onBeforeConnect` runs on the actor with the connection params the client sent. Throw an error to reject the connection:
+
+```ts PartyKit @nocheck
+static async onBeforeConnect(req: Party.Request, lobby: Party.Lobby) {
+  const token = new URL(req.url).searchParams.get("token") ?? "";
+  const session = await verifyToken(token);
+  if (!session) return new Response("Unauthorized", { status: 401 });
+  req.headers.set("X-User-ID", session.sub);
+  return req;
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-partykit/auth.ts" region="server" title="Rivet" />
+
+The client sends the token as params:
+
+<CodeSnippet file="examples/docs/migrate-partykit/auth.ts" region="client" title="Rivet" />
+
+See the [authentication guide](/guides/authentication) for JWT verification and role checks.
+
+## Schedule work
+
+A PartyKit room has one alarm at a time. A Rivet actor can have many pending [schedules](/actors/docs/schedule), and each one calls an action with its own arguments, so there is no single `onAlarm` to dispatch from:
+
+```ts PartyKit @nocheck
+async startRound() {
+  await this.room.storage.setAlarm(Date.now() + 60_000);
+}
+
+async onAlarm() {
+  this.room.broadcast(JSON.stringify({ type: "roundEnded" }));
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-partykit/alarms.ts" region="alarm" title="Rivet" />
+
+PartyKit cron jobs are defined in `partykit.json` and run in a static `onCron` outside any room. In Rivet, [cron jobs](/actors/docs/schedule#recurring-jobs) belong to an actor and call one of its actions, so they can read its database and broadcast to its connections. For a project-wide job, register it on a single actor with a fixed key such as `["global"]`.
+
+<CodeSnippet file="examples/docs/migrate-partykit/alarms.ts" region="cron" title="Rivet" />
+
+## Hibernate connections
+
+PartyKit's `hibernate: true` option keeps sockets open while the room is unloaded from memory. The Rivet equivalent is `canHibernateWebSocket`, which covers both action connections and raw WebSockets: when the actor sleeps, those sockets stay open instead of disconnecting.
+
+One thing changes. PartyKit keeps `conn.setState` data across hibernation, but `c.vars` does not survive actor sleep. Store per-connection data that must outlive a sleep in SQLite:
+
+<CodeSnippet file="examples/docs/migrate-partykit/hibernation.ts" title="Rivet" />
+
+WebSocket hibernation is in beta and off by default. Today an open connection still keeps the actor awake, so enabling it does not yet let a room with connected clients sleep. See [WebSocket Hibernation](/actors/docs/websocket-handler#websocket-hibernation).
+
+## Talk to other parties
+
+PartyKit rooms reach other parties through `room.context.parties`. In Rivet, every actor in the registry is reachable through `c.client()`, with typed actions instead of `fetch` or socket calls:
+
+```ts PartyKit @nocheck
+async onMessage(raw: string, sender: Party.Connection) {
+  const user = this.room.context.parties.user.get(sender.id);
+  await user.fetch({ method: "POST", body: JSON.stringify({ room: this.room.id }) });
+}
+```
+
+<CodeSnippet file="examples/docs/migrate-partykit/multi-party.ts" title="Rivet" />
+
+## Connect from the client
+
+`PartySocket` becomes a client created from your registry's type. Connections reconnect automatically after transient failures, and `conn.on` receives typed events:
+
+```ts PartyKit @nocheck
+import PartySocket from "partysocket";
+
+const socket = new PartySocket({ host: "my-app.partykit.dev", room: "general", query: { name: "Ada" } });
+socket.addEventListener("message", (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type === "message") console.log(`${msg.sender}: ${msg.text}`);
+});
+socket.send(JSON.stringify({ type: "chat", text: "Hello!" }));
+```
+
+<CodeSnippet file="examples/docs/migrate-partykit/client.ts" title="Rivet" />
+
+In React, `usePartySocket` becomes `useActor`:
+
+```tsx @nocheck
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./room";
+
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
+
+function Chat() {
+  const room = useActor({ name: "chatRoom", key: ["general"], params: { name: "Ada", team: "red" } });
+
+  room.useEvent("message", (message) => console.log(message.text));
+
+  return <button onClick={() => room.connection?.sendMessage("Hello!")}>Send</button>;
+}
+```
+
+## Differences to plan for
+
+- **No input gates.** PartyKit rooms run on Durable Objects, whose input gates hold other messages while a handler awaits `room.storage`, so a read-modify-write around storage calls is safe there. Rivet actions run concurrently and can interleave at each `await`. For read-modify-write updates, use a single SQL statement such as `UPDATE ... RETURNING`, a transaction with `c.db.transaction`, or a synchronous update to `c.vars`.
+- **Deployment.** There is no `partykit deploy` or `partykit.json`. Rivet Actors run in your own backend process, which you deploy wherever you host your app. Static assets, custom domains, environment variables, and preview environments come from that host. See [Deploy](/docs/deploy).
+- **Edge handlers.** `onFetch`, `onSocket`, `onBeforeRequest`, and the lobby run at the edge, outside any room. Move that logic into your HTTP server in front of Rivet, or into the actor's `onRequest` and `onBeforeConnect`.
+- **Request metadata.** Rivet does not add Cloudflare's `request.cf` fields, such as country. Pass what you need as connection params, or read headers your host adds from `c.request` in `onRequest` and `onWebSocket`.
+- **Connection IDs.** PartyKit lets clients choose their connection `id`. Rivet assigns connection IDs, so pass a stable user ID as a param when you need one.
+- **Yjs.** There is no `y-partykit` adapter. The [collaborative text editor guide](/guides/collaborative-text-editor) shows how to sync a Yjs document through an actor.
+- **AI and Vectorize bindings.** `lobby.ai` and `room.context.vectorize` have no built-in equivalent. Call your model or vector database provider from an action.
+- **Limits.** Room size, message size, and memory limits differ from PartyKit's. Check [Limits](/actors/docs/limits) before you migrate a large room.
+
+## Next steps
+
+- [Chat Room guide](/guides/chat-room): a complete room with history and broadcast
+- [Live Cursors and Presence guide](/guides/live-cursors): high-frequency presence updates
+- [Connections](/actors/docs/connections): the connection lifecycle and params
+- [Testing](/actors/docs/testing): test actors with Vitest
