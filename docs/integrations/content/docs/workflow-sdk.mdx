@@ -32,6 +32,8 @@ Start, and Vite.
 npm install workflow @rivet-dev/workflow-world
 ```
 
+The World requires `workflow` 5.8 or a later 5.x release.
+
 </Step>
 
 <Step title="Write a workflow">
@@ -126,8 +128,8 @@ Start a run:
 curl -X POST http://localhost:3000/orders/42
 ```
 
-Use the Workflow SDK's Vitest harness. The first World operation starts the
-native Rivet registry and control plane in the test process:
+Test the workflow code with the Workflow SDK's Vitest harness. The harness runs
+workflows on the SDK's in-process Local World, not on Rivet:
 
 ```sh
 npm test
@@ -201,6 +203,23 @@ crash and is not supported by this World.
 Application code continues to use `"use workflow"`, `"use step"`,
 `workflow/api`, hooks, sleeps, and streams exactly as documented by the Workflow
 SDK.
+
+## Compatibility
+
+The World creates runs at Workflow SDK spec version 8. Two SDK features are not
+supported:
+
+- `createHook({ experimental_force: true })` fails, because the World does not
+  take over a hook token that another run holds.
+- `experimental_rateLimit()` is not available, because it needs runs at spec
+  version 10.
+
+### Upgrading from an earlier release
+
+Releases of `@rivet-dev/workflow-world` that supported `workflow` 5.0 betas
+numbered events with ULIDs. The Workflow SDK 5 runtime cannot replay those runs.
+Every run is served by the deployment at `WORKFLOW_RUNTIME_URL`, so let in-flight
+runs finish on the previous release before you upgrade.
 
 ## Testing
 

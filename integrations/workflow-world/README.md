@@ -63,7 +63,7 @@ agentOS, stays in Vercel Eve's sandbox configuration.
 ## Workflow SDK compatibility
 
 This package implements the Workflow SDK 5 World contract and requires
-`workflow` 5.2 or newer. Event ids are positions in the run's log
+`workflow` 5.8 or newer. Event ids are positions in the run's log
 (`evnt_00000000000000000000000001` is a run's first event), allocated inside
 the run actor's transaction that appends the event.
 
