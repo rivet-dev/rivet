@@ -1,18 +1,24 @@
 import {
 	EntityConflictError,
 	HookNotFoundError,
+	RunExpiredError,
 	TooEarlyError,
 	WorkflowRunNotFoundError,
 	WorkflowWorldError,
 } from "@workflow/errors";
 import {
+	EVENT_ID_PREFIX,
+	FIRST_EVENT_SLOT,
 	MessageId,
-	SPEC_VERSION_CURRENT,
+	eventIdToSlot,
+	mintedSpecVersion,
+	slotToEventId,
 	stripEventDataRefs,
 	type CreateEventParams,
 	type CreateEventRequest,
 	type Event,
 	type EventResult,
+	type EventsResolveData,
 	type GetEventParams,
 	type GetHookParams,
 	type GetStepParams,
@@ -28,9 +34,9 @@ import {
 	type WorkflowRun,
 } from "@workflow/world";
 import { actor } from "rivetkit";
-import { isDeepStrictEqual } from "node:util";
 import { monotonicFactory } from "ulid";
 import { decodeValue, encodeValue } from "../codec.js";
+import { exposeWorldErrors } from "../world-errors.js";
 import type { CoordinatorIndexUpdate } from "./coordinator.js";
 import { workflowDb } from "./db.js";
 import {
@@ -278,10 +284,27 @@ async function currentRunStatus(c: Ctx, runId: string) {
 	return row?.status == null ? null : String(row.status);
 }
 
+const EVENT_ID_LIKE = `${EVENT_ID_PREFIX}%`;
+// Each insert re-reads the tail inside the actor transaction, and `event_id` is
+// the primary key, so a collision can only come from a writer outside that
+// transaction. Bounded so a broken invariant surfaces instead of spinning.
+const MAX_SLOT_ATTEMPTS = 8;
+
+async function lastEventSlot(c: Ctx) {
+	// Only slot-numbered ids take part. A run written by an older release holds
+	// ULID ids, which the runtime refuses to replay anyway (see README).
+	const row = await one(
+		c,
+		"SELECT event_id FROM workflow_events WHERE event_id LIKE ? ORDER BY event_id DESC LIMIT 1",
+		EVENT_ID_LIKE,
+	);
+	const slot = row ? eventIdToSlot(String(row.event_id)) : null;
+	return slot ?? FIRST_EVENT_SLOT - 1;
+}
+
 async function insertEvent(
 	c: Ctx,
 	runId: string,
-	eventId: string,
 	data: StorableEventRequest,
 	specVersion: number,
 	now: number,
@@ -292,54 +315,121 @@ async function insertEvent(
 	// `@workflow/world` queue.d.ts).
 	const storedEventData = "eventData" in data ? data.eventData : undefined;
 	const dedupeCreation = creationEvents.has(data.eventType);
-	await c.db.execute(
-		`
-			INSERT ${dedupeCreation ? "OR IGNORE" : ""} INTO workflow_events (
-				event_id, run_id, event_type, correlation_id, event_data, spec_version, created_at
-			)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`,
-		eventId,
-		runId,
-		data.eventType,
-		"correlationId" in data ? data.correlationId : null,
-		encodeValue(storedEventData),
-		specVersion,
-		now,
-	);
-	const inserted = await one(
-		c,
-		"SELECT * FROM workflow_events WHERE event_id = ?",
-		eventId,
-	);
-	if (inserted) return rowToEvent(inserted);
-	if (dedupeCreation) {
-		const existing =
-			data.eventType === "run_created"
-				? await one(
-						c,
-						"SELECT * FROM workflow_events WHERE run_id = ? AND event_type = 'run_created'",
-						runId,
-					)
-				: await one(
-						c,
-						"SELECT * FROM workflow_events WHERE run_id = ? AND event_type = ? AND correlation_id = ?",
-						runId,
-						data.eventType,
-						"correlationId" in data ? data.correlationId : null,
-					);
-		if (existing) return rowToEvent(existing);
+	const correlationId = "correlationId" in data ? data.correlationId : null;
+	for (let attempt = 0; attempt < MAX_SLOT_ATTEMPTS; attempt++) {
+		// The event's id is its 1-based position in the run's log. It is taken
+		// from the committed tail in the same transaction that appends the row,
+		// so the log stays dense and no reader can pass a slot that is filled
+		// later.
+		const eventId = slotToEventId((await lastEventSlot(c)) + 1);
+		const inserted = await c.db.execute(
+			`
+				INSERT INTO workflow_events (
+					event_id, run_id, event_type, correlation_id, event_data, spec_version, created_at
+				)
+				VALUES (?, ?, ?, ?, ?, ?, ?)
+				ON CONFLICT DO NOTHING
+				RETURNING *
+			`,
+			eventId,
+			runId,
+			data.eventType,
+			correlationId,
+			encodeValue(storedEventData),
+			specVersion,
+			now,
+		);
+		if (inserted[0]) return rowToEvent(inserted[0]);
+		if (dedupeCreation) {
+			// A creation event that already exists converges on the committed one
+			// and allocates no slot.
+			const existing =
+				data.eventType === "run_created"
+					? await one(
+							c,
+							"SELECT * FROM workflow_events WHERE run_id = ? AND event_type = 'run_created'",
+							runId,
+						)
+					: await one(
+							c,
+							"SELECT * FROM workflow_events WHERE run_id = ? AND event_type = ? AND correlation_id = ?",
+							runId,
+							data.eventType,
+							correlationId,
+						);
+			if (existing) return rowToEvent(existing);
+		}
 	}
-	return rowToEvent({
-		...data,
-		run_id: runId,
-		event_id: eventId,
-		event_type: data.eventType,
-		correlation_id: "correlationId" in data ? data.correlationId : null,
-		event_data: encodeValue(storedEventData),
-		spec_version: specVersion,
-		created_at: now,
-	});
+	throw new WorkflowWorldError(
+		`Could not allocate an event slot for run "${runId}"`,
+	);
+}
+
+/**
+ * Bump-and-report: the events occupying the slots between the one the writer
+ * expected (`eventCount + 1`) and the one this write committed at.
+ */
+async function skippedEvents(
+	c: Ctx,
+	runId: string,
+	committedEventId: string,
+	eventCount: number,
+	resolveData: EventsResolveData,
+) {
+	const expected = Math.max(eventCount + 1, FIRST_EVENT_SLOT);
+	const committed = eventIdToSlot(committedEventId);
+	if (committed == null || committed <= expected) return undefined;
+	const rows = await c.db.execute(
+		`
+		SELECT * FROM workflow_events
+		WHERE run_id = ? AND event_id >= ? AND event_id < ?
+		ORDER BY event_id ASC
+		`,
+		runId,
+		slotToEventId(expected),
+		committedEventId,
+	);
+	return rows.map((row) => stripEventDataRefs(rowToEvent(row), resolveData));
+}
+
+const stepSettlingEvents = new Set([
+	"step_completed",
+	"step_failed",
+	"step_retrying",
+]);
+
+/**
+ * A finished run accepts only the outcome of a step that was already running
+ * when it finished. Nothing may begin on it: `run_started` and `step_started`
+ * are refused with `RunExpiredError`, which the runtime reads as "nothing left
+ * to execute", even when the step row still reads `running` (a redelivery of a
+ * start an earlier delivery already claimed). The run is the only liveness
+ * check left once step messages stop carrying run status.
+ */
+async function assertAllowedOnTerminalRun(
+	c: Ctx,
+	data: StorableEventRequest,
+	status: string,
+) {
+	if (data.eventType === "run_started" || data.eventType === "step_started") {
+		throw new RunExpiredError(
+			`Workflow run is already in terminal state "${status}"`,
+		);
+	}
+	if (stepSettlingEvents.has(data.eventType) && "correlationId" in data) {
+		const step = await one(
+			c,
+			"SELECT status FROM workflow_steps WHERE step_id = ?",
+			data.correlationId,
+		);
+		if (step && String(step.status) === "running") return;
+		throw new RunExpiredError(
+			`Cannot modify non-running step on run in terminal state "${status}"`,
+		);
+	}
+	throw new EntityConflictError(
+		`Cannot modify run in terminal state "${status}"`,
+	);
 }
 
 async function listEventsForRun(c: Ctx, runId: string) {
@@ -561,7 +651,7 @@ export const workflowRun = actor({
 			hookSideEffects?: HookSideEffects,
 		): Promise<EventResult> => {
 			const wfc = asWorkflowContext(c);
-			return withRecoveryWriter(wfc, async () => {
+			return exposeWorldErrors(() => withRecoveryWriter(wfc, async () => {
 			const actorRunId = wfc.key[0];
 			if (!actorRunId) throw new Error("workflowRun actor key is missing");
 			if (runIdOrNull != null) assertRunKey(wfc, runIdOrNull);
@@ -572,7 +662,7 @@ export const workflowRun = actor({
 					: runIdOrNull;
 			if (!runId) throw new Error("runId is required");
 
-			const specVersion = data.specVersion ?? SPEC_VERSION_CURRENT;
+			const specVersion = data.specVersion ?? mintedSpecVersion();
 			const now = Date.now();
 			const resolveData = params?.resolveData ?? "all";
 			let run: WorkflowRun | undefined;
@@ -587,9 +677,7 @@ export const workflowRun = actor({
 					? null
 					: await currentRunStatus(c, runId);
 			if (status && terminalRuns.has(status)) {
-				throw new EntityConflictError(
-					`Cannot modify run in terminal state "${status}"`,
-				);
+				await assertAllowedOnTerminalRun(c, data, status);
 			}
 			if (
 				status == null &&
@@ -810,7 +898,6 @@ export const workflowRun = actor({
 					await insertEvent(
 						c,
 						runId,
-						`wevt_${ulid()}`,
 						{
 							eventType: "step_created",
 							correlationId: data.correlationId,
@@ -828,23 +915,26 @@ export const workflowRun = actor({
 						data.correlationId,
 					);
 				} else if (existing && lazyData) {
-					if (
-						String(existing.step_name) !== lazyData.stepName ||
-						!isDeepStrictEqual(decodeValue(existing.input), lazyData.input)
-					) {
-						throw new EntityConflictError(
-							`Step "${data.correlationId}" already exists with different data`,
-						);
-					}
+					// A lazy start is a create-claim: the runtime only sends one for a
+					// step whose step_created it deferred, so finding the step means a
+					// concurrent handler won the claim. The loser must get a conflict
+					// (the runtime maps it to `skipped`) rather than the winner's step,
+					// or it would run the body a second time.
+					throw new EntityConflictError(
+						`Step "${data.correlationId}" already created`,
+					);
 				}
 				if (!existing)
 					throw new WorkflowWorldError(`Step "${data.correlationId}" not found`);
-				if (
-					String(existing.status) === "running" ||
-					terminalSteps.has(String(existing.status))
-				) {
-					// Vercel may redeliver an accepted step start. Returning the existing
-					// step keeps delivery idempotent without incrementing its attempt.
+				if (terminalSteps.has(String(existing.status))) {
+					throw new EntityConflictError(
+						`Cannot modify step in terminal state "${existing.status}"`,
+					);
+				}
+				if (String(existing.status) === "running") {
+					// A queue may redeliver an accepted step start. Returning the
+					// existing step keeps delivery idempotent without incrementing its
+					// attempt.
 					step = rowToStep(existing);
 				} else {
 					if (
@@ -1091,7 +1181,6 @@ export const workflowRun = actor({
 			const event = await insertEvent(
 				c,
 				runId,
-				`wevt_${ulid()}`,
 				data,
 				specVersion,
 				now,
@@ -1190,12 +1279,24 @@ export const workflowRun = actor({
 			let events: Event[] | undefined;
 			let cursor: string | null | undefined;
 			let hasMore: boolean | undefined;
-			if (data.eventType === "run_started" && run) {
+			if (data.eventType === "run_started" && run && !params?.skipPreload) {
 				events = (await listEventsForRun(c, runId)).map((item) =>
 					stripEventDataRefs(item, resolveData),
 				);
 				cursor = events.at(-1)?.eventId ?? null;
 				hasMore = false;
+			} else if (params?.eventCount !== undefined && event.eventId) {
+				events = await skippedEvents(
+					c,
+					runId,
+					event.eventId,
+					params.eventCount,
+					resolveData,
+				);
+				if (events) {
+					cursor = null;
+					hasMore = false;
+				}
 			}
 
 			return {
@@ -1216,34 +1317,36 @@ export const workflowRun = actor({
 			await wfc.schedule.after(0, "wake");
 			startPendingDrain(wfc);
 			return result;
-			});
+			}));
 		},
-		getRun: async (c, runId: string, params?: GetWorkflowRunParams) => {
-			assertRunKey(c, runId);
-			return filterData(
-				await requireRun(c, runId),
-				params?.resolveData,
-			) as WorkflowRun;
-		},
-		getEvent: async (
+		getRun: (c, runId: string, params?: GetWorkflowRunParams) =>
+			exposeWorldErrors(async () => {
+				assertRunKey(c, runId);
+				return filterData(
+					await requireRun(c, runId),
+					params?.resolveData,
+				) as WorkflowRun;
+			}),
+		getEvent: (
 			c,
 			runId: string,
 			eventId: string,
 			params?: GetEventParams,
-		) => {
-			assertRunKey(c, runId);
-			const row = await one(
-				c,
-				`
-				SELECT * FROM workflow_events
-				WHERE run_id = ? AND event_id = ?
-				`,
-				runId,
-				eventId,
-			);
-			if (!row) throw new WorkflowWorldError(`Event not found: ${eventId}`);
-			return stripEventDataRefs(rowToEvent(row), params?.resolveData ?? "all");
-		},
+		) =>
+			exposeWorldErrors(async () => {
+				assertRunKey(c, runId);
+				const row = await one(
+					c,
+					`
+					SELECT * FROM workflow_events
+					WHERE run_id = ? AND event_id = ?
+					`,
+					runId,
+					eventId,
+				);
+				if (!row) throw new WorkflowWorldError(`Event not found: ${eventId}`);
+				return stripEventDataRefs(rowToEvent(row), params?.resolveData ?? "all");
+			}),
 		listEvents: async (c, params: ListEventsParams) => {
 			assertRunKey(c, params.runId);
 			const limit = params.pagination?.limit ?? 100;
@@ -1274,15 +1377,17 @@ export const workflowRun = actor({
 			c,
 			params: ListEventsByCorrelationIdParams,
 		) => {
+			assertRunKey(c, params.runId);
 			const limit = params.pagination?.limit ?? 100;
 			const cursor = params.pagination?.cursor;
 			const rows = await c.db.execute(
 				`
 				SELECT * FROM workflow_events
-				WHERE correlation_id = ? AND (? IS NULL OR event_id > ?)
+				WHERE run_id = ? AND correlation_id = ? AND (? IS NULL OR event_id > ?)
 				ORDER BY event_id ASC
 				LIMIT ?
 				`,
+				params.runId,
 				params.correlationId,
 				cursor ?? null,
 				cursor ?? null,
@@ -1297,24 +1402,23 @@ export const workflowRun = actor({
 				hasMore: rows.length > limit,
 			};
 		},
-		getStep: async (
+		getStep: (
 			c,
-			runId: string | undefined,
+			runId: string,
 			stepId: string,
 			params?: GetStepParams,
-		) => {
-			if (runId) assertRunKey(c, runId);
-			const row = runId
-				? await one(
-						c,
-						"SELECT * FROM workflow_steps WHERE run_id = ? AND step_id = ?",
-						runId,
-						stepId,
-					)
-				: await one(c, "SELECT * FROM workflow_steps WHERE step_id = ?", stepId);
-			if (!row) throw new WorkflowWorldError(`Step not found: ${stepId}`);
-			return filterData(rowToStep(row), params?.resolveData) as Step;
-		},
+		) =>
+			exposeWorldErrors(async () => {
+				assertRunKey(c, runId);
+				const row = await one(
+					c,
+					"SELECT * FROM workflow_steps WHERE run_id = ? AND step_id = ?",
+					runId,
+					stepId,
+				);
+				if (!row) throw new WorkflowWorldError(`Step not found: ${stepId}`);
+				return filterData(rowToStep(row), params?.resolveData) as Step;
+			}),
 		listSteps: async (c, params: ListWorkflowRunStepsParams) => {
 			assertRunKey(c, params.runId);
 			const limit = params.pagination?.limit ?? 20;
@@ -1340,15 +1444,16 @@ export const workflowRun = actor({
 				hasMore: rows.length > limit,
 			};
 		},
-		getHook: async (c, hookId: string, params?: GetHookParams) => {
-			const row = await one(
-				c,
-				"SELECT * FROM workflow_hooks WHERE hook_id = ?",
-				hookId,
-			);
-			if (!row) throw new HookNotFoundError(hookId);
-			return filterHookData(rowToHook(row), params?.resolveData) as Hook;
-		},
+		getHook: (c, hookId: string, params?: GetHookParams) =>
+			exposeWorldErrors(async () => {
+				const row = await one(
+					c,
+					"SELECT * FROM workflow_hooks WHERE hook_id = ?",
+					hookId,
+				);
+				if (!row) throw new HookNotFoundError(hookId);
+				return filterHookData(rowToHook(row), params?.resolveData) as Hook;
+			}),
 		ownsHook: async (c, hookId: string, token: string) => {
 			const runId = c.key[0];
 			if (!runId) throw new Error("workflowRun actor key is missing");

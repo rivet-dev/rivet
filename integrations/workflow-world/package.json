@@ -24,22 +24,26 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@workflow/errors": "5.0.0-beta.11",
-		"@workflow/world": "5.0.0-beta.21",
+		"@workflow/errors": "5.2.0",
+		"@workflow/utils": "5.1.1",
+		"@workflow/world": "5.4.0",
 		"cbor-x": "^1.6.0",
 		"rivetkit": "workspace:*",
 		"ulid": "~3.0.1"
+	},
+	"peerDependencies": {
+		"workflow": "^5.8.0"
 	},
 	"devDependencies": {
 		"@rivetkit/engine-cli": "workspace:*",
 		"@rivetkit/engine-cli-linux-x64-musl": "2.3.5",
 		"@rivetkit/rivetkit-napi-linux-x64-gnu": "2.3.5",
 		"@types/node": "^24.0.0",
-		"@workflow/world-testing": "5.0.0-beta.35",
+		"@workflow/world-testing": "5.1.6",
 		"tsx": "^4.20.0",
 		"typescript": "^5.5.2",
 		"vite": "^7.0.0",
-		"vitest": "^4.1.9"
+		"vitest": "^4.1.10"
 	},
 	"engines": {
 		"node": ">=22.0.0"
