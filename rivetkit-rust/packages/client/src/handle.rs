@@ -1,4 +1,5 @@
 use crate::{
+	client::ShutdownGuard,
 	common::{EncodingKind, RawWebSocket, TransportKind, HEADER_CONN_PARAMS, HEADER_ENCODING},
 	connection::{
 		start_connection, ActorConnection, ActorConnectionInner, ConnParams, ParamsCallback,
@@ -364,17 +365,17 @@ pub struct ActorHandle {
 	remote_manager: RemoteManager,
 	params: Option<JsonValue>,
 	query: ActorQuery,
-	client_shutdown_tx: Arc<tokio::sync::broadcast::Sender<()>>,
+	shutdown: Arc<ShutdownGuard>,
 	transport_kind: crate::TransportKind,
 	encoding_kind: EncodingKind,
 }
 
 impl ActorHandle {
-	pub fn new(
+	pub(crate) fn new(
 		remote_manager: RemoteManager,
 		params: Option<JsonValue>,
 		query: ActorQuery,
-		client_shutdown_tx: Arc<tokio::sync::broadcast::Sender<()>>,
+		shutdown: Arc<ShutdownGuard>,
 		transport_kind: TransportKind,
 		encoding_kind: EncodingKind,
 	) -> Self {
@@ -390,7 +391,7 @@ impl ActorHandle {
 			remote_manager,
 			params,
 			query,
-			client_shutdown_tx,
+			shutdown,
 			transport_kind,
 			encoding_kind,
 		}
@@ -432,7 +433,7 @@ impl ActorHandle {
 			params,
 		);
 
-		let rx = self.client_shutdown_tx.subscribe();
+		let rx = self.shutdown.shutdown_tx.subscribe();
 		start_connection(&conn, rx);
 
 		conn
