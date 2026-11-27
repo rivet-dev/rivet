@@ -3,9 +3,9 @@
 use rivet_metrics::{
 	MICRO_BUCKETS, REGISTRY,
 	prometheus::{
-		Histogram, HistogramOpts, HistogramVec, IntGauge, Opts,
+		Histogram, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts,
 		register_histogram_vec_with_registry, register_histogram_with_registry,
-		register_int_gauge_with_registry,
+		register_int_counter_vec_with_registry, register_int_gauge_with_registry,
 	},
 };
 
@@ -111,6 +111,33 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	)
 	.unwrap();
+
+	static ref SQLITE_DEFERRED_UNFLUSHED_BYTES: IntGauge = register_int_gauge_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_deferred_unflushed_bytes",
+			"bytes every deferred-commit SQLite database in the process committed locally that storage has not acknowledged",
+		),
+		*REGISTRY
+	)
+	.unwrap();
+
+	static ref SQLITE_DEFERRED_FLUSH_RETRIES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		Opts::new(
+			"rivetkit_sqlite_deferred_flush_retries_total",
+			"failed deferred-commit flush attempts that were retried, by failure class",
+		),
+		&["class"],
+		*REGISTRY
+	)
+	.unwrap();
+}
+
+/// Counts one retried deferred-commit flush attempt. The counter is process-wide, so its
+/// cardinality is the handful of failure classes.
+pub(crate) fn record_deferred_flush_retry(class: &'static str) {
+	SQLITE_DEFERRED_FLUSH_RETRIES_TOTAL
+		.with_label_values(&[class])
+		.inc();
 }
 
 /// Reports the pool through the process-global registry.
@@ -141,6 +168,10 @@ impl sqlite_embedded::worker::SqlitePoolMetrics for PoolMetrics {
 
 	fn set_page_buffer_capacity_pages(&self, pages: u64) {
 		SQLITE_PAGE_BUFFER_CAPACITY_PAGES.set(pages as i64);
+	}
+
+	fn set_deferred_unflushed_bytes(&self, bytes: u64) {
+		SQLITE_DEFERRED_UNFLUSHED_BYTES.set(bytes as i64);
 	}
 
 	fn set_page_buffer_pages(&self, pages: u64) {

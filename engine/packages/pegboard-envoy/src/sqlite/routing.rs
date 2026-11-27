@@ -83,15 +83,12 @@ pub(crate) async fn request(
 	let owned = match owned {
 		Ok(owned) => owned,
 		Err(error) => {
-			if let Some(retry_after_ms) = refused_before_dispatch(&error) {
+			let reply_to = ReplyTo::of(&message)?;
+			if let Some((reason, retry_after_ms)) = retryable_failure(reply_to.kind, &error) {
 				prove_inherited_tail(ctx, id, &error).await;
-				return Ok(refused_failure(
-					ReplyTo::of(&message)?,
-					refusal_reason(&error),
-					retry_after_ms,
-				));
+				return Ok(refused_failure(reply_to, reason, retry_after_ms));
 			}
-			return failure(&message, "sqlite", "storage_error", error.to_string());
+			return Ok(reply_to.failure("sqlite", "storage_error", error.to_string()));
 		}
 	};
 	let bound = owned;
@@ -145,13 +142,9 @@ pub(crate) async fn request(
 			Ok(reply_to.failure("sqlite", "remote_indeterminate_result", error.to_string()))
 		}
 		Err(error) => {
-			if let Some(retry_after_ms) = refused_before_dispatch(&error) {
+			if let Some((reason, retry_after_ms)) = retryable_failure(reply_to.kind, &error) {
 				prove_inherited_tail(ctx, id, &error).await;
-				return Ok(refused_failure(
-					reply_to,
-					refusal_reason(&error),
-					retry_after_ms,
-				));
+				return Ok(refused_failure(reply_to, reason, retry_after_ms));
 			}
 			tracing::warn!(%actor_id, ?error, "actor SQLite request failed");
 			Ok(reply_to.failure("sqlite", "storage_error", error.to_string()))
@@ -192,6 +185,84 @@ fn refused_before_dispatch(error: &anyhow::Error) -> Option<u64> {
 	};
 	transient.then_some(REFUSED_WRITE_RETRY_AFTER_MS)
 }
+
+/// The reason and retry hint of a failed request the runtime may send again, or `None` when
+/// the failure is final or a write's outcome may be unknown: a refusal before dispatch, or, for
+/// a page read, a storage condition that passes.
+fn retryable_failure(kind: RequestKind, error: &anyhow::Error) -> Option<(&'static str, u64)> {
+	if let Some(retry_after_ms) = refused_before_dispatch(error) {
+		return Some((refusal_reason(error), retry_after_ms));
+	}
+	match kind {
+		RequestKind::GetPages => transient_read_failure(error)
+			.then_some((TRANSIENT_READ_REASON, REFUSED_WRITE_RETRY_AFTER_MS)),
+		RequestKind::Commit
+		| RequestKind::CommitStageBegin
+		| RequestKind::CommitStageSegment
+		| RequestKind::CommitFinalize
+		| RequestKind::Exec
+		| RequestKind::Execute
+		| RequestKind::ExecuteBatch => None,
+	}
+}
+
+/// Whether a page read failed on a storage condition that passes. A read changes nothing the
+/// runtime can see, so it may be sent again whatever the failure would mean for a write: a
+/// quorum or deadline that an earlier write the read waits behind did not meet yet, a busy
+/// inode, or a cold store that is behind or unavailable. Answering these as a storage error made
+/// the runtime fail the statement with SQLite's I/O error, which hosts treat as a broken
+/// database. A fence, corruption, a missing volume or a blocked history stays final.
+fn transient_read_failure(error: &anyhow::Error) -> bool {
+	use depot_client::volumes::Error as VolumeError;
+
+	let filesystem = match error.downcast_ref::<FilesystemError>() {
+		Some(filesystem) => filesystem,
+		None => {
+			return match error.downcast_ref::<VolumeError>() {
+				Some(VolumeError::Filesystem(filesystem)) => transient_filesystem(filesystem),
+				Some(VolumeError::Write(write)) => transient_log(write),
+				Some(_) | None => false,
+			};
+		}
+	};
+	transient_filesystem(filesystem)
+}
+
+fn transient_filesystem(error: &FilesystemError) -> bool {
+	match error {
+		FilesystemError::Busy
+		| FilesystemError::Lagging
+		| FilesystemError::Unavailable
+		| FilesystemError::DeadlineExceeded => true,
+		FilesystemError::Log(write) => transient_log(write),
+		// Refusals with a hint of their own answer before this check.
+		FilesystemError::Overloaded
+		| FilesystemError::ApplyBacklog { .. }
+		| FilesystemError::VersionUnavailable { .. }
+		| FilesystemError::ColdReadRefused => false,
+		FilesystemError::Filesystem(_)
+		| FilesystemError::Fenced
+		| FilesystemError::TooLarge
+		| FilesystemError::TooOld
+		| FilesystemError::Conflict
+		| FilesystemError::BaseUnavailable
+		| FilesystemError::Corrupt
+		| FilesystemError::RecordMissing { .. } => false,
+	}
+}
+
+fn transient_log(error: &WriteError) -> bool {
+	matches!(
+		error,
+		WriteError::QuorumUnavailable { .. }
+			| WriteError::DeadlineExceeded { .. }
+			| WriteError::ColdStoreUnavailable
+			| WriteError::Overloaded { .. }
+	)
+}
+
+/// The reply reason of a page read that failed on a storage condition that passes.
+const TRANSIENT_READ_REASON: &str = "storage_unavailable";
 
 /// Builds the request-scoped error reply for a SQLite request.
 /// The reply to a request of `epoch` after that epoch stopped on this connection. It

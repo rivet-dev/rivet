@@ -12,7 +12,7 @@ use std::{
 	fmt,
 	sync::{
 		Arc, Weak,
-		atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering},
+		atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering},
 	},
 	thread::JoinHandle,
 	time::{Duration, Instant},
@@ -35,9 +35,9 @@ use crate::{
 		exec_statements_profiled, execute_single_statement, execute_single_statement_profiled,
 	},
 	vfs::{
-		CorkClose, NativeConnection, NativeVfsHandle, SqliteCommitIndeterminateError,
-		SqliteOperationProfile, SqliteRoundTripCounts, SqliteVfsMetrics,
-		configure_connection_for_database, open_connection, sqlite_exec,
+		CommitAdmission, CorkClose, NativeConnection, NativeVfsHandle,
+		SqliteCommitIndeterminateError, SqliteOperationProfile, SqliteRoundTripCounts,
+		SqliteVfsMetrics, configure_connection_for_database, open_connection, sqlite_exec,
 	},
 };
 
@@ -97,6 +97,10 @@ pub trait SqlitePoolMetrics: Send + Sync {
 
 	/// Configured byte budget of the process-wide SQLite pager cache.
 	fn set_pager_cache_capacity_bytes(&self, _bytes: u64) {}
+
+	/// Reports the bytes every deferred database in the process committed locally that storage
+	/// has not acknowledged yet.
+	fn set_deferred_unflushed_bytes(&self, _bytes: u64) {}
 
 	/// Bytes the process-wide SQLite pager cache holds across every connection.
 	fn set_pager_cache_bytes(&self, _bytes: u64) {}
@@ -450,6 +454,9 @@ impl SqlitePool {
 			metrics.set_pool_threads(max_threads as u64);
 		}
 		let page_budget = process_page_budget(metrics.clone());
+		if let Some(metrics) = &metrics {
+			crate::page_buffer::process_unflushed_budget().attach_metrics(metrics.clone());
+		}
 		// The startup probe may have installed the cache already. This also covers paths that
 		// construct a pool first and attaches the pool's metrics to the shared cache.
 		crate::pager_cache::install(
@@ -816,7 +823,7 @@ impl DatabaseSlot {
 	/// A discard of the corked commits is a control path like the close and is never refused
 	/// for a full queue: refusing it would leave the corked commits for the close, whose
 	/// connection drop sends them to depot.
-	fn enqueue(self: &Arc<Self>, command: SqliteCommand) -> Result<()> {
+	fn enqueue(self: &Arc<Self>, mut command: SqliteCommand) -> Result<()> {
 		match self.inner.state.load(Ordering::Acquire) {
 			STATE_RUNNING => {}
 			STATE_CLOSING | STATE_CLOSED => return Err(sqlite_closing_error()),
@@ -824,6 +831,28 @@ impl DatabaseSlot {
 			other => return Err(anyhow!("unknown sqlite worker state {other}")),
 		}
 		let mut work = self.work.lock();
+		// An uncork inside an open transaction only parks until a later command ends the
+		// transaction. With no statement queued or running, no command ahead of it can end the
+		// transaction first, so it cannot wait. Its own reply is the one counted.
+		if let SqliteCommand::Uncork { reply } = &mut command {
+			let in_transaction = *self.inner.explicit_transaction.borrow();
+			if in_transaction && self.inner.may_wait_commands.load(Ordering::Acquire) == 1 {
+				reply.stop_counting();
+			}
+		}
+		// A command that must not wait never queues behind one that may wait for storage or the
+		// network, for as long as storage is behind. Behind any other command it queues. Its own
+		// reply is one of the counted commands. Checked under the lock, so a command counted
+		// after this check queues behind this one.
+		if command.refused_behind_waiting_commands()
+			&& self.inner.may_wait_commands.load(Ordering::Acquire) > 1
+		{
+			drop(work);
+			return Err(match self.vfs.storage_wait_refusal() {
+				Some(error) => error.into(),
+				None => SqliteWorkerBusyError.into(),
+			});
+		}
 		let control = matches!(command, SqliteCommand::DiscardCork { .. });
 		if !control && work.commands.len() >= SQLITE_WORKER_QUEUE_CAPACITY {
 			drop(work);
@@ -1132,6 +1161,8 @@ fn fail_queued_commands(commands: &mut VecDeque<QueuedCommand>) {
 pub struct SqliteWorkerHandle {
 	slot: Arc<DatabaseSlot>,
 	_pool: SqlitePool,
+	/// What the commits of `execute` and `exec` through this handle do when storage is behind.
+	admission: CommitAdmission,
 }
 
 struct SqliteWorkerInner {
@@ -1147,9 +1178,100 @@ struct SqliteWorkerInner {
 	/// later SQL command, cork or uncork fails as closing instead of committing straight to
 	/// depot, and the close drops the corked commits even when the discard never ran.
 	discard_requested: AtomicBool,
+	/// Commands queued or running that may wait for storage or the network and whose reply is
+	/// not sent yet; see `Reply`.
+	may_wait_commands: AtomicUsize,
+}
+
+/// A command's reply. A command that may wait counts in `may_wait_commands` until its reply is
+/// sent or dropped, and stops counting before the caller can see the reply, so a caller's next
+/// command never finds its own finished one ahead of it.
+struct Reply<T> {
+	sender: oneshot::Sender<T>,
+	unfinished: Unfinished,
+}
+
+/// Counts a command that may wait in `may_wait_commands` until it drops.
+struct Unfinished(Option<Arc<SqliteWorkerInner>>);
+
+impl Unfinished {
+	fn new(inner: &Arc<SqliteWorkerInner>, may_wait: bool) -> Self {
+		Self(may_wait.then(|| {
+			inner.may_wait_commands.fetch_add(1, Ordering::AcqRel);
+			Arc::clone(inner)
+		}))
+	}
+
+	fn stop_counting(&mut self) {
+		if let Some(inner) = self.0.take() {
+			inner.may_wait_commands.fetch_sub(1, Ordering::AcqRel);
+		}
+	}
+}
+
+impl Drop for Unfinished {
+	fn drop(&mut self) {
+		self.stop_counting();
+	}
+}
+
+impl<T> Reply<T> {
+	fn new(inner: &Arc<SqliteWorkerInner>, may_wait: bool) -> (Self, oneshot::Receiver<T>) {
+		let (sender, receiver) = oneshot::channel();
+		let reply = Self {
+			sender,
+			unfinished: Unfinished::new(inner, may_wait),
+		};
+		(reply, receiver)
+	}
+
+	/// Stops counting the command as one that may wait, for one known not to.
+	fn stop_counting(&mut self) {
+		self.unfinished.stop_counting();
+	}
+
+	fn send(self, value: T) -> std::result::Result<(), T> {
+		let sender = self.into_sender();
+		sender.send(value)
+	}
+
+	fn is_closed(&self) -> bool {
+		self.sender.is_closed()
+	}
+
+	/// Sends the reply and keeps the command unfinished until the returned guard drops, for
+	/// work the command still does after its reply.
+	fn send_holding(self, value: T) -> Unfinished {
+		let Self { sender, unfinished } = self;
+		let _ = sender.send(value);
+		unfinished
+	}
+
+	/// The bare sender of a reply that stops counting as unfinished now.
+	fn into_sender(self) -> oneshot::Sender<T> {
+		self.sender
+	}
 }
 
 impl SqliteCommand {
+	/// Whether the command runs for a caller that blocks its thread and must never wait, so it
+	/// is refused behind a command that may wait. A `ROLLBACK` never is: it cannot wait for
+	/// storage, and refusing it leaves the caller's transaction open with no way to end it.
+	fn refused_behind_waiting_commands(&self) -> bool {
+		match self {
+			SqliteCommand::Execute {
+				sql,
+				admission: CommitAdmission::Refuse,
+				..
+			} => classify_statement(sql) != "rollback",
+			SqliteCommand::Exec {
+				admission: CommitAdmission::Refuse,
+				..
+			} => true,
+			_ => false,
+		}
+	}
+
 	/// Whether the command fails as closing once a discard of the corked commits was
 	/// requested: every command that runs SQL or moves the cork.
 	fn refused_after_discard(&self) -> bool {
@@ -1169,27 +1291,29 @@ enum SqliteCommand {
 		sql: String,
 		params: Option<Vec<BindParam>>,
 		enqueued_at: Option<Instant>,
-		reply: oneshot::Sender<Result<SqliteWorkerResult<ExecuteResult>>>,
+		admission: CommitAdmission,
+		reply: Reply<Result<SqliteWorkerResult<ExecuteResult>>>,
 	},
 	Exec {
 		sql: String,
 		enqueued_at: Option<Instant>,
-		reply: oneshot::Sender<Result<SqliteWorkerResult<QueryResult>>>,
+		admission: CommitAdmission,
+		reply: Reply<Result<SqliteWorkerResult<QueryResult>>>,
 	},
 	/// Runs statements in order on one pool thread hold, stopping at the first that fails.
 	ExecuteBatch {
 		statements: Vec<(String, Option<Vec<BindParam>>)>,
-		reply: oneshot::Sender<Result<SqliteWorkerResult<Vec<ExecuteResult>>>>,
+		reply: Reply<Result<SqliteWorkerResult<Vec<ExecuteResult>>>>,
 	},
 	/// Holds later commits in memory; see `NativeDatabase::cork_commits`.
 	Cork {
 		close: CorkClose,
-		reply: oneshot::Sender<Result<()>>,
+		reply: Reply<Result<()>>,
 	},
 	/// Sends the corked commits as one; see `NativeDatabase::uncork_commits`.
-	Uncork { reply: oneshot::Sender<Result<()>> },
+	Uncork { reply: Reply<Result<()>> },
 	/// Drops the corked commits; see `NativeDatabase::discard_corked_commits`.
-	DiscardCork { reply: oneshot::Sender<Result<()>> },
+	DiscardCork { reply: Reply<Result<()>> },
 }
 
 #[derive(Debug)]
@@ -1249,6 +1373,14 @@ fn report_vfs_memory(db: &NativeConnection, metrics: Option<&dyn SqliteVfsMetric
 }
 
 impl SqliteWorkerHandle {
+	/// A handle to the same database whose `execute` and `exec` commits follow `admission`.
+	pub fn with_commit_admission(&self, admission: CommitAdmission) -> Self {
+		Self {
+			admission,
+			..self.clone()
+		}
+	}
+
 	/// Runs the database on a dedicated single-thread pool, for callers without a shared one.
 	pub fn start(
 		vfs: NativeVfsHandle,
@@ -1286,6 +1418,7 @@ impl SqliteWorkerHandle {
 			ready: Mutex::new(Some(ready_rx)),
 			explicit_transaction: watch::Sender::new(false),
 			discard_requested: AtomicBool::new(false),
+			may_wait_commands: AtomicUsize::new(0),
 		});
 		let shared = &pool.owner.shared;
 		let id = {
@@ -1322,6 +1455,7 @@ impl SqliteWorkerHandle {
 		Ok(Self {
 			slot,
 			_pool: pool.clone(),
+			admission: CommitAdmission::Wait,
 		})
 	}
 
@@ -1371,10 +1505,11 @@ impl SqliteWorkerHandle {
 		sql: String,
 		enqueued_at: Option<Instant>,
 	) -> Result<SqliteWorkerResult<QueryResult>> {
-		let (reply, result) = oneshot::channel();
+		let (reply, result) = Reply::new(&self.slot.inner, true);
 		self.slot.enqueue(SqliteCommand::Exec {
 			sql,
 			enqueued_at,
+			admission: self.admission,
 			reply,
 		})?;
 		result.await.map_err(|_| sqlite_worker_dead_error())?
@@ -1402,11 +1537,12 @@ impl SqliteWorkerHandle {
 		params: Option<Vec<BindParam>>,
 		enqueued_at: Option<Instant>,
 	) -> Result<SqliteWorkerResult<ExecuteResult>> {
-		let (reply, result) = oneshot::channel();
+		let (reply, result) = Reply::new(&self.slot.inner, true);
 		self.slot.enqueue(SqliteCommand::Execute {
 			sql,
 			params,
 			enqueued_at,
+			admission: self.admission,
 			reply,
 		})?;
 		result.await.map_err(|_| sqlite_worker_dead_error())?
@@ -1419,7 +1555,7 @@ impl SqliteWorkerHandle {
 		&self,
 		statements: Vec<(String, Option<Vec<BindParam>>)>,
 	) -> Result<Vec<ExecuteResult>> {
-		let (reply, result) = oneshot::channel();
+		let (reply, result) = Reply::new(&self.slot.inner, true);
 		self.slot
 			.enqueue(SqliteCommand::ExecuteBatch { statements, reply })?;
 		result
@@ -1433,7 +1569,7 @@ impl SqliteWorkerHandle {
 	/// held. None of them is durable until uncorking succeeds. `close` decides whether a close
 	/// before uncorking, on any path including a panicking command, sends or drops them.
 	pub async fn cork_commits(&self, close: CorkClose) -> Result<()> {
-		let (reply, result) = oneshot::channel();
+		let (reply, result) = Reply::new(&self.slot.inner, false);
 		self.slot.enqueue(SqliteCommand::Cork { close, reply })?;
 		result.await.map_err(|_| sqlite_worker_dead_error())?
 	}
@@ -1441,7 +1577,7 @@ impl SqliteWorkerHandle {
 	/// Sends the transactions committed since `cork_commits` to depot as one commit. Inside an
 	/// explicit transaction it waits until the transaction ends, so the commit includes it.
 	pub async fn uncork_commits(&self) -> Result<()> {
-		let (reply, result) = oneshot::channel();
+		let (reply, result) = Reply::new(&self.slot.inner, true);
 		self.slot.enqueue(SqliteCommand::Uncork { reply })?;
 		result.await.map_err(|_| sqlite_worker_dead_error())?
 	}
@@ -1463,7 +1599,7 @@ impl SqliteWorkerHandle {
 		self.inner()
 			.discard_requested
 			.store(true, Ordering::Release);
-		let (reply, result) = oneshot::channel();
+		let (reply, result) = Reply::new(&self.slot.inner, false);
 		self.slot.enqueue(SqliteCommand::DiscardCork { reply })?;
 		result.await.map_err(|_| sqlite_worker_dead_error())?
 	}
@@ -1629,6 +1765,7 @@ fn run_command(
 	// A storage failure belongs to the command whose statement saw it. One that a command
 	// left unreported, such as an uncork's, must not relabel a later command's own failure.
 	let _ = vfs.take_storage_error();
+	let mut held = None;
 	run_command_inner(
 		db,
 		vfs,
@@ -1640,13 +1777,57 @@ fn run_command(
 		pending_uncork,
 		explicit_transaction,
 		progress,
+		&mut held,
 	);
 
-	// A deferred uncork runs as soon as the transaction it waited on ends.
-	if pending_uncork.is_some() && !command_in_tx(db) {
+	// A deferred uncork runs as soon as the transaction it waited on ends, after that command's
+	// reply and with its commit admission restored to waiting. `held` keeps the command
+	// unfinished until then.
+	if uncork_due(db, pending_uncork) {
 		if let Some(reply) = pending_uncork.take() {
 			let _ = reply.send(db.uncork_commits());
 		}
+	}
+	drop(held);
+}
+
+fn uncork_due(
+	db: &mut NativeConnection,
+	pending_uncork: &Option<oneshot::Sender<Result<()>>>,
+) -> bool {
+	pending_uncork.is_some() && !command_in_tx(db)
+}
+
+/// Sends a statement's reply, holding the command unfinished when an uncork runs after it.
+fn send_statement_reply<T>(
+	reply: Reply<T>,
+	value: T,
+	uncork_due: bool,
+	held: &mut Option<Unfinished>,
+) {
+	if uncork_due {
+		*held = Some(reply.send_holding(value));
+	} else {
+		let _ = reply.send(value);
+	}
+}
+
+/// Applies one command's commit admission while it runs, and restores waiting after it, also
+/// when the command panics.
+struct AdmissionScope<'a> {
+	vfs: &'a NativeVfsHandle,
+}
+
+impl<'a> AdmissionScope<'a> {
+	fn new(vfs: &'a NativeVfsHandle, admission: CommitAdmission) -> Self {
+		vfs.set_commit_admission(admission);
+		Self { vfs }
+	}
+}
+
+impl Drop for AdmissionScope<'_> {
+	fn drop(&mut self) {
+		self.vfs.set_commit_admission(CommitAdmission::Wait);
 	}
 }
 
@@ -1662,6 +1843,7 @@ fn run_command_inner(
 	pending_uncork: &mut Option<oneshot::Sender<Result<()>>>,
 	explicit_transaction: &watch::Sender<bool>,
 	progress: &CommandProgress,
+	held: &mut Option<Unfinished>,
 ) {
 	let start = Instant::now();
 	match command {
@@ -1669,11 +1851,13 @@ fn run_command_inner(
 			sql,
 			params,
 			enqueued_at,
+			admission,
 			reply,
 		} => {
 			if reply.is_closed() {
 				return;
 			}
+			let _admission = AdmissionScope::new(vfs, admission);
 			begin_transaction_if_needed(db, transaction);
 			// Read the transaction state before running so the label reflects the
 			// transaction the statement executed against, not the state it leaves
@@ -1735,16 +1919,19 @@ fn run_command_inner(
 			};
 			finalize_transaction_if_complete(db, metrics, file_name, transaction);
 			publish_explicit_transaction(db, explicit_transaction);
-			let _ = reply.send(worker_command_result(db, vfs, progress, worker_result));
+			let result = worker_command_result(db, vfs, progress, worker_result);
+			send_statement_reply(reply, result, uncork_due(db, pending_uncork), held);
 		}
 		SqliteCommand::Exec {
 			sql,
 			enqueued_at,
+			admission,
 			reply,
 		} => {
 			if reply.is_closed() {
 				return;
 			}
+			let _admission = AdmissionScope::new(vfs, admission);
 			begin_transaction_if_needed(db, transaction);
 			let in_tx = command_in_tx(db);
 			let stmt_kind = classify_statement(&sql);
@@ -1779,7 +1966,8 @@ fn run_command_inner(
 			};
 			finalize_transaction_if_complete(db, metrics, file_name, transaction);
 			publish_explicit_transaction(db, explicit_transaction);
-			let _ = reply.send(worker_command_result(db, vfs, progress, worker_result));
+			let result = worker_command_result(db, vfs, progress, worker_result);
+			send_statement_reply(reply, result, uncork_due(db, pending_uncork), held);
 		}
 		SqliteCommand::ExecuteBatch { statements, reply } => {
 			if reply.is_closed() {
@@ -1828,7 +2016,8 @@ fn run_command_inner(
 				result,
 				profile: SqliteOperationProfile::default(),
 			};
-			let _ = reply.send(worker_command_result(db, vfs, progress, worker_result));
+			let result = worker_command_result(db, vfs, progress, worker_result);
+			send_statement_reply(reply, result, uncork_due(db, pending_uncork), held);
 		}
 		SqliteCommand::Cork { close, reply } => {
 			db.cork_commits(close);
@@ -1850,7 +2039,8 @@ fn run_command_inner(
 					"an earlier sqlite uncork is still waiting for its transaction"
 				)));
 			} else {
-				*pending_uncork = Some(reply);
+				// It runs after a later command ends the transaction and holds nothing until then.
+				*pending_uncork = Some(reply.into_sender());
 			}
 		}
 	}
@@ -2141,6 +2331,8 @@ fn worker_error_code(error: &anyhow::Error) -> &'static str {
 		.is_some()
 	{
 		"overloaded"
+	} else if error.downcast_ref::<SqliteWorkerBusyError>().is_some() {
+		"busy"
 	} else if error.downcast_ref::<SqliteWorkerFatalError>().is_some() {
 		"fatal"
 	} else if error.downcast_ref::<SqliteWorkerClosingError>().is_some() {
@@ -2167,6 +2359,20 @@ impl fmt::Display for SqliteWorkerOverloadedError {
 }
 
 impl Error for SqliteWorkerOverloadedError {}
+
+/// A command that must not wait arrived while a command on the database that may wait for
+/// storage or the network was queued or running. Nothing ran; the caller may retry once the
+/// other command finishes.
+#[derive(Debug)]
+pub struct SqliteWorkerBusyError;
+
+impl fmt::Display for SqliteWorkerBusyError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str("sqlite database is busy with another command")
+	}
+}
+
+impl Error for SqliteWorkerBusyError {}
 
 #[derive(Debug)]
 pub struct SqliteWorkerClosingError;
