@@ -70,6 +70,8 @@ members = [
   "rivetkit-rust/packages/inspector-protocol",
   "rivetkit-rust/packages/rivetkit",
   "rivetkit-rust/packages/rivetkit-core",
+  "rivetkit-rust/packages/rivetkit-ffi",
+  "rivetkit-rust/packages/rivetkit-host-adapter",
   "rivetkit-rust/packages/shared-types",
   "rivetkit-typescript/packages/rivetkit-napi",
   "rivetkit-typescript/packages/rivetkit-wasm",
@@ -532,6 +534,10 @@ members = [
 
     [workspace.dependencies.rivetkit-client]
     path = "rivetkit-rust/packages/client"
+    version = "=3.1.2-rc.9"
+
+    [workspace.dependencies.rivetkit-host-adapter]
+    path = "rivetkit-rust/packages/rivetkit-host-adapter"
     version = "=3.1.2-rc.9"
 
     [workspace.dependencies.rivetkit-actor-persist]

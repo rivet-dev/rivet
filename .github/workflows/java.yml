@@ -1,0 +1,66 @@
+name: Java SDK
+on:
+  pull_request:
+    paths:
+      - rivetkit-java/**
+      - rivetkit-rust/packages/**
+      - engine/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - .github/workflows/java.yml
+  push:
+    branches:
+      - main
+    paths:
+      - rivetkit-java/**
+      - rivetkit-rust/packages/**
+      - engine/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - .github/workflows/java.yml
+concurrency:
+  group: java-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash -e {0}
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  test:
+    name: Rust + Java tests (incl. end to end)
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      # Pins java, gradle, rust, cbindgen and jextract from rivetkit-java/mise.toml.
+      - uses: jdx/mise-action@v2
+        with:
+          working_directory: rivetkit-java
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: java-sdk
+          cache-on-failure: true
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('rivetkit-java/**/*.kts', 'rivetkit-java/gradle/libs.versions.toml') }}
+      - name: Build the engine (the end-to-end tests spawn it)
+        run: cargo build -p rivet-engine --bin rivet-engine
+      - name: Generated header and bindings are current
+        working-directory: rivetkit-java
+        run: mise run bindings:check
+      - name: Exactly one unsafe block
+        working-directory: rivetkit-java
+        run: mise run unsafe:check
+      - name: Tests
+        working-directory: rivetkit-java
+        env:
+          RIVET_ENGINE_BINARY_PATH: ${{ github.workspace }}/target/debug/rivet-engine
+        run: mise run test
