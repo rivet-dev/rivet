@@ -139,7 +139,7 @@ importers:
   examples/actor-actions:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -185,7 +185,7 @@ importers:
         specifier: ^0.0.66
         version: 0.0.66(zod@4.3.6)
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       ai:
         specifier: ^4.0.38
@@ -354,7 +354,7 @@ importers:
   examples/collaborative-document:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -403,7 +403,7 @@ importers:
   examples/collaborative-document-ot:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -446,7 +446,7 @@ importers:
   examples/cross-actor-actions:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -489,7 +489,7 @@ importers:
   examples/cursors:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -532,7 +532,7 @@ importers:
   examples/cursors-raw-websocket:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -690,7 +690,7 @@ importers:
         specifier: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b
         version: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       ai:
         specifier: ^4.0.38
@@ -782,7 +782,7 @@ importers:
   examples/hello-world:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -1107,7 +1107,7 @@ importers:
   examples/native-websockets:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -1156,7 +1156,7 @@ importers:
   examples/per-tenant-database:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -1199,7 +1199,7 @@ importers:
   examples/raw-websocket-handler:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -1242,7 +1242,7 @@ importers:
   examples/react:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -1408,7 +1408,7 @@ importers:
   examples/state:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -1451,7 +1451,7 @@ importers:
   examples/stream:
     dependencies:
       '@rivetkit/react':
-        specifier: ^3.1.2-rc.8
+        specifier: ^3.1.2-rc.9
         version: link:../../rivetkit-typescript/packages/react
       react:
         specifier: 19.1.0
@@ -1823,8 +1823,8 @@ importers:
         specifier: workspace:*
         version: link:../workflow-engine
       cbor-x:
-        specifier: ^1.6.0
-        version: 1.6.0
+        specifier: ^1.6.6
+        version: 1.6.9
       drizzle-kit:
         specifier: ^0.31.2
         version: 0.31.5
@@ -1943,8 +1943,8 @@ importers:
         specifier: ^0.6.2
         version: 0.6.2
       cbor-x:
-        specifier: ^1.6.0
-        version: 1.6.0
+        specifier: ^1.6.6
+        version: 1.6.9
       fdb-tuple:
         specifier: ^1.0.0
         version: 1.0.0
@@ -1980,8 +1980,8 @@ importers:
         specifier: ^0.6.2
         version: 0.6.2
       cbor-x:
-        specifier: ^1.6.0
-        version: 1.6.0
+        specifier: ^1.6.6
+        version: 1.6.9
       fdb-tuple:
         specifier: ^1.0.0
         version: 1.0.0
@@ -2632,6 +2632,11 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@cbor-extract/cbor-extract-darwin-arm64@2.2.3':
+    resolution: {integrity: sha512-qpUy9Yoisi6a7QHOVa+AlnqfN7eVstSRhpLwiLnwi6i3SNLkM5D2Z7MXl4LC5nUGA77mZEt479cPH3u8GD163Q==}
+    cpu: [arm64]
+    os: [darwin]
+
   '@cbor-extract/cbor-extract-darwin-x64@2.2.0':
     resolution: {integrity: sha512-1liF6fgowph0JxBbYnAS7ZlqNYLf000Qnj4KjqPNW4GViKrEql2MgZnAsExhY9LSy8dnvA4C0qHEBgPrll0z0w==}
     cpu: [x64]
@@ -2639,6 +2644,11 @@ packages:
 
   '@cbor-extract/cbor-extract-darwin-x64@2.2.2':
     resolution: {integrity: sha512-32b1mgc+P61Js+KW9VZv/c+xRw5EfmOcPx990JbCBSkYJFY0l25VinvyyWfl+3KjibQmAcYwmyzKF9J4DyKP/Q==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@cbor-extract/cbor-extract-darwin-x64@2.2.3':
+    resolution: {integrity: sha512-6bZbK7dyKn8BUNmG3UfzSnM4L/OzJ8xGAtBHYycprl+bgvtZmZoQC7CucWXuF/oHJP5skzqkqFr6BLSSGIkoWw==}
     cpu: [x64]
     os: [darwin]
 
@@ -2652,6 +2662,11 @@ packages:
     cpu: [arm64]
     os: [linux]
 
+  '@cbor-extract/cbor-extract-linux-arm64@2.2.3':
+    resolution: {integrity: sha512-QAuFuQkOw0cm4MNc+QwxH9aiMxmrczESnVEu33B8m2Du9fBuH/1AvJfmO8YajpeWLoHqt2iUG3d1/gIWAKY8IQ==}
+    cpu: [arm64]
+    os: [linux]
+
   '@cbor-extract/cbor-extract-linux-arm@2.2.0':
     resolution: {integrity: sha512-QeBcBXk964zOytiedMPQNZr7sg0TNavZeuUCD6ON4vEOU/25+pLhNN6EDIKJ9VLTKaZ7K7EaAriyYQ1NQ05s/Q==}
     cpu: [arm]
@@ -2659,6 +2674,11 @@ packages:
 
   '@cbor-extract/cbor-extract-linux-arm@2.2.2':
     resolution: {integrity: sha512-tNg0za41TpQfkhWjptD+0gSD2fggMiDCSacuIeELyb2xZhr7PrhPe5h66Jc67B/5dmpIhI2QOUtv4SBsricyYQ==}
+    cpu: [arm]
+    os: [linux]
+
+  '@cbor-extract/cbor-extract-linux-arm@2.2.3':
+    resolution: {integrity: sha512-joCovTc7uEYCL9XxdAJJpGIH7Vvc31Fi7vh3HnlY5zgkLSU/64WxYl5iUi/puE21qT3bmxMfOZEZUbnqVKeJTQ==}
     cpu: [arm]
     os: [linux]
 
@@ -2672,6 +2692,11 @@ packages:
     cpu: [x64]
     os: [linux]
 
+  '@cbor-extract/cbor-extract-linux-x64@2.2.3':
+    resolution: {integrity: sha512-IQMPVLulOvFv9Had7J1idJyfQzsFamDVdjH37qW7suHI7mgO4w1Oo3MisL7AjnWARxo0/ZmEEQ3i81WA7y34Ug==}
+    cpu: [x64]
+    os: [linux]
+
   '@cbor-extract/cbor-extract-win32-x64@2.2.0':
     resolution: {integrity: sha512-l2M+Z8DO2vbvADOBNLbbh9y5ST1RY5sqkWOg/58GkUPBYou/cuNZ68SGQ644f1CvZ8kcOxyZtw06+dxWHIoN/w==}
     cpu: [x64]
@@ -2679,6 +2704,11 @@ packages:
 
   '@cbor-extract/cbor-extract-win32-x64@2.2.2':
     resolution: {integrity: sha512-dI+9P7cfWxkTQ+oE+7Aa6onEn92PHgfWXZivjNheCRmTBDBf2fx6RyTi0cmgpYLnD1KLZK9ZYrMxaPZ4oiXhGA==}
+    cpu: [x64]
+    os: [win32]
+
+  '@cbor-extract/cbor-extract-win32-x64@2.2.3':
+    resolution: {integrity: sha512-fGFfq6F3l0GCoKOZeyjjm3q+NHO7jo8ILtQ93U3rYJOgG2BGLS/QmBdoFLNEsoWPjyxAS8svWhTyo73MTDawog==}
     cpu: [x64]
     os: [win32]
 
@@ -7085,11 +7115,18 @@ packages:
     resolution: {integrity: sha512-hlSxxI9XO2yQfe9g6msd3g4xCfDqK5T5P0fRMLuaLHhxn4ViPrm+a+MUfhrvH2W962RGxcBwEGzLQyjbDG1gng==}
     hasBin: true
 
+  cbor-extract@2.2.3:
+    resolution: {integrity: sha512-zTOCEYwiQDChj5DV/sUqccv3jhdZqbhymztwcrW2LncIG2fPPkb1ceK5rmr0bdtxzJCXoWzZ95shA+uaSH8cKw==}
+    hasBin: true
+
   cbor-x@1.6.0:
     resolution: {integrity: sha512-0kareyRwHSkL6ws5VXHEf8uY1liitysCVJjlmhaLG+IXLqhSaOO+t63coaso7yjwEzWZzLy8fJo06gZDVQM9Qg==}
 
   cbor-x@1.6.4:
     resolution: {integrity: sha512-UGKHjp6RHC6QuZ2yy5LCKm7MojM4716DwoSaqwQpaH4DvZvbBTGcoDNTiG9Y2lByXZYFEs9WRkS5tLl96IrF1Q==}
+
+  cbor-x@1.6.9:
+    resolution: {integrity: sha512-TCT9XHLb4iPGQ99fpQjcTRncbus6cXHvSD/RY+bPrDACBCJKiQLmAM6r7/BgQcI5i+8h4gwp4vjfb6S6T8bPGw==}
 
   chai@5.3.3:
     resolution: {integrity: sha512-4zNhdJD/iOjSH0A05ea+Ke6MU5mmpQcbQsSOkgdaUMJ9zTlDTD/GYlwohmIE2u0gaxHYiVHEn1Fw9mZ/ktJWgw==}
@@ -12618,10 +12655,16 @@ snapshots:
   '@cbor-extract/cbor-extract-darwin-arm64@2.2.2':
     optional: true
 
+  '@cbor-extract/cbor-extract-darwin-arm64@2.2.3':
+    optional: true
+
   '@cbor-extract/cbor-extract-darwin-x64@2.2.0':
     optional: true
 
   '@cbor-extract/cbor-extract-darwin-x64@2.2.2':
+    optional: true
+
+  '@cbor-extract/cbor-extract-darwin-x64@2.2.3':
     optional: true
 
   '@cbor-extract/cbor-extract-linux-arm64@2.2.0':
@@ -12630,10 +12673,16 @@ snapshots:
   '@cbor-extract/cbor-extract-linux-arm64@2.2.2':
     optional: true
 
+  '@cbor-extract/cbor-extract-linux-arm64@2.2.3':
+    optional: true
+
   '@cbor-extract/cbor-extract-linux-arm@2.2.0':
     optional: true
 
   '@cbor-extract/cbor-extract-linux-arm@2.2.2':
+    optional: true
+
+  '@cbor-extract/cbor-extract-linux-arm@2.2.3':
     optional: true
 
   '@cbor-extract/cbor-extract-linux-x64@2.2.0':
@@ -12642,10 +12691,16 @@ snapshots:
   '@cbor-extract/cbor-extract-linux-x64@2.2.2':
     optional: true
 
+  '@cbor-extract/cbor-extract-linux-x64@2.2.3':
+    optional: true
+
   '@cbor-extract/cbor-extract-win32-x64@2.2.0':
     optional: true
 
   '@cbor-extract/cbor-extract-win32-x64@2.2.2':
+    optional: true
+
+  '@cbor-extract/cbor-extract-win32-x64@2.2.3':
     optional: true
 
   '@cfworker/json-schema@4.1.1': {}
@@ -17300,6 +17355,18 @@ snapshots:
       '@cbor-extract/cbor-extract-win32-x64': 2.2.2
     optional: true
 
+  cbor-extract@2.2.3:
+    dependencies:
+      node-gyp-build-optional-packages: 5.1.1
+    optionalDependencies:
+      '@cbor-extract/cbor-extract-darwin-arm64': 2.2.3
+      '@cbor-extract/cbor-extract-darwin-x64': 2.2.3
+      '@cbor-extract/cbor-extract-linux-arm': 2.2.3
+      '@cbor-extract/cbor-extract-linux-arm64': 2.2.3
+      '@cbor-extract/cbor-extract-linux-x64': 2.2.3
+      '@cbor-extract/cbor-extract-win32-x64': 2.2.3
+    optional: true
+
   cbor-x@1.6.0:
     optionalDependencies:
       cbor-extract: 2.2.0
@@ -17307,6 +17374,10 @@ snapshots:
   cbor-x@1.6.4:
     optionalDependencies:
       cbor-extract: 2.2.2
+
+  cbor-x@1.6.9:
+    optionalDependencies:
+      cbor-extract: 2.2.3
 
   chai@5.3.3:
     dependencies:

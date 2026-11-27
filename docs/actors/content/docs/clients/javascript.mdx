@@ -43,6 +43,8 @@ Use `params` for static connection parameters. Use `getParams` when the value ca
 
 Transient connection failures trigger reconnection. Actions rejected during a disconnect are removed from the outbound queue; a request already sent can have an unknown outcome. Use application-level idempotency before retrying mutations. A permanent connection-opening failure rejects subsequent calls on that connection; create a new connection after correcting the cause.
 
+To give up on an action, pass `signal` to `conn.action({ name, args, signal })`, for example `AbortSignal.timeout(5_000)`. The call rejects with the signal's reason. An action still queued while the connection opens or reconnects is never sent. An action already sent can still run on the actor.
+
 ## Low-Level HTTP & WebSocket
 
 For actors that implement `onRequest` or `onWebSocket`, call them directly:

@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/traces",
-	"version": "3.1.2-rc.8",
+	"version": "3.1.2-rc.9",
 	"description": "Generic tracing storage and OTLP export for RivetKit",
 	"license": "Apache-2.0",
 	"type": "module",
@@ -59,7 +59,7 @@
 	"dependencies": {
 		"@rivetkit/bare-ts": "^0.6.2",
 		"fdb-tuple": "^1.0.0",
-		"cbor-x": "^1.6.0",
+		"cbor-x": "^1.6.6",
 		"vbare": "^0.0.4"
 	},
 	"devDependencies": {

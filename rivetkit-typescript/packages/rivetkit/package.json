@@ -1,6 +1,6 @@
 {
 	"name": "rivetkit",
-	"version": "3.1.2-rc.8",
+	"version": "3.1.2-rc.9",
 	"description": "Lightweight libraries for building stateful actors on edge platforms",
 	"license": "Apache-2.0",
 	"keywords": [
@@ -220,7 +220,7 @@
 		"@rivetkit/traces": "workspace:*",
 		"@rivetkit/virtual-websocket": "workspace:*",
 		"@rivetkit/workflow-engine": "workspace:*",
-		"cbor-x": "^1.6.0",
+		"cbor-x": "^1.6.6",
 		"drizzle-orm": "catalog:",
 		"hono": "^4.7.0",
 		"invariant": "^2.2.4",

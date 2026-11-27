@@ -43,6 +43,8 @@ public actor ActorConnection {
     private var connectTask: Task<Void, Never>?
     private var messageQueue: [ToServerMessage] = []
     private var actionsInFlight: [UInt64: CheckedContinuation<Data, Error>] = [:]
+    /// Sent actions whose task was cancelled. Their late replies are ignored.
+    private var abandonedActions: Set<UInt64> = []
     private var eventSubscriptions: [String: [UUID: EventSubscription]] = [:]
     private var errorHandlers: [UUID: ActorErrorCallback] = [:]
     private var openHandlers: [UUID: ConnectionStateCallback] = [:]
@@ -90,6 +92,7 @@ public actor ActorConnection {
         args: [AnyEncodable],
         as _: Response.Type = Response.self
     ) async throws -> Response {
+        try Task.checkCancellation()
         if status == .disposed {
             logger.debug("action \(name, privacy: .public) called after dispose")
             throw ActorConnDisposed()
@@ -104,14 +107,36 @@ public actor ActorConnection {
 
         let request = ToServerMessage(body: .actionRequest(ActionRequest(id: actionId, name: name, args: args)))
 
-        let data = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-            actionsInFlight[actionId] = continuation
-            logger.debug("added action to in-flight map actionId=\(actionId) actionName=\(name, privacy: .public) inFlightCount=\(self.actionsInFlight.count)")
-            sendMessage(request, ephemeral: false)
+        let data = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+                actionsInFlight[actionId] = continuation
+                logger.debug("added action to in-flight map actionId=\(actionId) actionName=\(name, privacy: .public) inFlightCount=\(self.actionsInFlight.count)")
+                sendMessage(request, ephemeral: false)
+            }
+        } onCancel: {
+            // The handler runs outside the actor. The cancel runs after the continuation is
+            // registered, because this call holds the actor until it suspends.
+            Task { await self.cancelAction(actionId) }
         }
 
         logger.debug("received action response actionId=\(actionId) actionName=\(name, privacy: .public)")
         return try CBORSupport.decode(Response.self, from: data)
+    }
+
+    /// Gives up on an action whose task was cancelled, and throws `CancellationError` to its
+    /// caller. The actor never sees a queued action, so it is dropped from the queue. A sent
+    /// action may still run on the actor, and its late reply is ignored.
+    private func cancelAction(_ actionId: UInt64) {
+        guard let continuation = actionsInFlight.removeValue(forKey: actionId) else {
+            return
+        }
+        let queuedCount = messageQueue.count
+        messageQueue.removeAll { $0.actionId == actionId }
+        if messageQueue.count == queuedCount {
+            abandonedActions.insert(actionId)
+        }
+        logger.debug("cancelled action actionId=\(actionId) wasQueued=\(self.messageQueue.count != queuedCount)")
+        continuation.resume(throwing: CancellationError())
     }
 
     /// Performs an action with variadic typed arguments using parameter packs.
@@ -546,6 +571,9 @@ public actor ActorConnection {
         let actorError = ActorError(group: group, code: code, message: message, metadata: metadata)
         if let actionId {
             logger.warning("action error actionId=\(actionId) group=\(group, privacy: .public) code=\(code, privacy: .public) message=\(message, privacy: .public)")
+            if abandonedActions.remove(actionId) != nil {
+                return
+            }
             if let continuation = actionsInFlight.removeValue(forKey: actionId) {
                 logger.debug("removed action from in-flight map actionId=\(actionId) inFlightCount=\(self.actionsInFlight.count)")
                 continuation.resume(throwing: actorError)
@@ -578,6 +606,9 @@ public actor ActorConnection {
     }
 
     private func handleActionResponse(_ response: ActionResponseMessage) async {
+        if abandonedActions.remove(response.id) != nil {
+            return
+        }
         guard let continuation = actionsInFlight.removeValue(forKey: response.id) else {
             logger.error("action response not found in in-flight map actionId=\(response.id) inFlightCount=\(self.actionsInFlight.count)")
             return
@@ -888,10 +919,13 @@ public actor ActorConnection {
     }
 
     private func rejectAllPending(error: Error) {
+        // Rejected actions must not stay queued and run after a reconnect.
+        messageQueue.removeAll()
         for (_, continuation) in actionsInFlight {
             continuation.resume(throwing: error)
         }
         actionsInFlight.removeAll()
+        abandonedActions.removeAll()
     }
 
     private func setStatus(_ newStatus: ActorConnStatus) {
@@ -1333,6 +1367,15 @@ private struct SubscriptionRequest: Encodable, Sendable {
 
 private struct ToServerMessage: Encodable, Sendable {
     let body: ToServerBody
+
+    var actionId: UInt64? {
+        switch body {
+        case .actionRequest(let request):
+            return request.id
+        case .subscriptionRequest:
+            return nil
+        }
+    }
 }
 
 private enum ToServerBody: Encodable, Sendable {

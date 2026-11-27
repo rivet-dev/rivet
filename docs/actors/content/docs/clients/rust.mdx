@@ -217,6 +217,8 @@ async fn main() -> Result<()> {
 
 `ConnectionStatus` is one of `Idle`, `Connecting`, `Connected`, or `Disconnected`. Connections reconnect automatically with backoff until you call `disconnect`, or until the actor is destroyed.
 
+To give up on an action, drop its future, for example with `tokio::time::timeout`. An action still queued while the connection opens or reconnects is never sent. An action already sent can still run on the actor.
+
 ## Low-Level HTTP & WebSocket
 
 For actors that implement `on_request` or `on_websocket`, call them directly on the untyped handle (`handle.inner()`). `fetch` returns a `reqwest::Response`, and `web_socket` returns a `tokio_tungstenite` stream. This example also needs a few extra crates:

@@ -69,6 +69,7 @@ A connection lives in a `Scope`. `handle.connect` opens it, and it closes when t
 
 - `connect` fails with the declared `connection.error` if `authorize` refuses the connection, and with a `RivetError` if the connection cannot open.
 - The connection reconnects after a transient failure. A reconnect makes a new connection on the actor, with a new `id`.
+- Interrupting an action call drops the action if it is still queued while the connection opens or reconnects. An action already sent can still run on the actor.
 - An event stream fails with a `RivetError` if the connection drops and cannot reconnect.
 - If the actor's [`canSubscribe`](#connections-and-events) refuses a subscription, RivetKit closes the connection, and each event stream of the connection fails with the `RivetError` `auth.forbidden`.
 

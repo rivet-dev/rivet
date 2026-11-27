@@ -1,3 +1,6 @@
+use super::actor_connect::{cbor_write_map_len, cbor_write_null, cbor_write_string};
+use super::cbor_args::{cbor_action_args_array, cbor_map_fields};
+use super::cbor_payload::decode_client_payload_json;
 use super::dispatch::*;
 use super::inspector::*;
 use super::*;
@@ -284,7 +287,16 @@ impl RegistryDispatcher {
 						"failed to disconnect HTTP action connection"
 					);
 				}
-				let response = encode_http_action_response(encoding, output)?;
+				let response = match encode_http_action_response(encoding, output) {
+					Ok(response) => response,
+					Err(error) => {
+						return framework_anyhow_error_response_with_actor(
+							encoding,
+							error.context("encode HTTP action response"),
+							Some(&actor),
+						);
+					}
+				};
 				if response.body.as_ref().map(Vec::len).unwrap_or_default()
 					> config.max_outgoing_message_size as usize
 				{
@@ -920,10 +932,9 @@ pub(super) fn decode_http_action_args(
 				encode_json_as_cbor(&args)
 			}
 			HttpResponseEncoding::Cbor => {
-				let request: HttpActionRequestJson = ciborium::from_reader(Cursor::new(body))
-					.context("decode cbor HTTP action request")?;
-				let args = normalize_json_args(request.args);
-				encode_json_as_cbor(&args)
+				let [args] =
+					cbor_map_fields(body, ["args"]).context("decode cbor HTTP action request")?;
+				Ok(cbor_action_args_array(args))
 			}
 			HttpResponseEncoding::Bare => {
 				let request =
@@ -990,16 +1001,18 @@ pub(super) fn encode_http_action_response(
 			|| {
 				let body = match encoding {
 				HttpResponseEncoding::Json => serde_json::to_vec(&json!({
-					"output": decode_cbor_json_or_null(&output),
+					"output": decode_client_payload_json(&output)?,
 				}))?,
 				HttpResponseEncoding::Cbor => {
-					let mut out = Vec::new();
-					ciborium::into_writer(
-						&json!({
-							"output": decode_cbor_json_or_null(&output),
-						}),
-						&mut out,
-					)?;
+					// The output is already CBOR, so it is embedded as is.
+					let mut out = Vec::with_capacity(output.len() + 8);
+					cbor_write_map_len(&mut out, 1);
+					cbor_write_string(&mut out, "output");
+					if output.is_empty() {
+						cbor_write_null(&mut out);
+					} else {
+						out.extend_from_slice(&output);
+					}
 					out
 				}
 				HttpResponseEncoding::Bare => {
